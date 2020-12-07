@@ -17,20 +17,32 @@ from structures.communication_network import DirectCommunication, BroadcastNode,
 import pandas as pd
 import networkx as nx
 
+random.seed(12)
 INF  = 99999
 
 
-def random_graph(size):
+def random_graph(size, target_fiedler = 0.5):
     graph = np.array([np.array([0 if i == j else 1 for j in range(size)]) for i in range(size)])
-    tree = SpecifySmallStep(graph).create_graph(0.5, bound="one")
+    tree = SpecifySmallStep(graph).create_graph(target_fiedler, bound="one")
     return tree
 
-def generate_random_graphs(n):
+def random_weighted_graph(size, target_fiedler = 0.5):
+    # graph = np.array([np.array([0 if i == j else random.randint(1,40) for j in range(size)]) for i in range(size)])
+    graph = np.array([np.array([0 if i == j else random.randint(1,40) for j in range(size)]) for i in range(size)])
+    # Make undirected (Currently only supports undirected)
+    for u in range(len(graph)):
+        for v in range(len(graph)):
+            if u < v:
+                graph[v][u] = graph[u][v]
+    tree = SpecifySmallStep(graph).create_graph(target_fiedler, bound="one")
+    return tree
+
+def generate_random_graphs(n, target_fiedler = 0.5, random_w = False):
     # Generate fully connected
     graphs = []
     for i in range(n):
         size = (i + 1) * 5
-        tree = random_graph(size)
+        tree = random_weighted_graph(size,target_fiedler) if random_w else random_graph(size, target_fiedler)
         # print(tree)
         graphs.append(tree)
     return graphs
@@ -119,26 +131,43 @@ if __name__ == "__main__":
     #         perform_test(formation[key], formation["name"] + " " + key)
     
     # print()
+
+    # graphs = generate_random_graphs(5, 0.75)
+    # for graph_i, graph in enumerate(graphs):
+    #     perform_test(graph, "Random Size {}".format(len(graph)))
         
-    graphs = generate_random_graphs(5)
+    # print()
+        
+    # graphs = generate_random_graphs(5)
+    # for graph_i, graph in enumerate(graphs):
+    #     perform_test(graph, "Random Size {}".format(len(graph)))
+        
+    # print()
+
+    # graphs = generate_random_graphs(5, 0.25)
+    # for graph_i, graph in enumerate(graphs):
+    #     perform_test(graph, "Random Size {}".format(len(graph)))
+        
+    # print()
+
+    print("RANDOM GRAPHS:")
+
+    print()
+
+    graphs = generate_random_graphs(2, 0.75, True)
     for graph_i, graph in enumerate(graphs):
         perform_test(graph, "Random Size {}".format(len(graph)))
         
-        # from_edges = []
-        # to_edges = []
-        # # for u in range(len(graph)):
-        #     for v in range(len(graph)):
-        #         if graph[u][v]:
-        #             from_edges.append(u)
-        #             to_edges.append(v)
-        # Build a dataframe with 4 connections
-        # df = pd.DataFrame({ 'from':from_edges, 'to':to_edges})
-        # df
-        
-        # Build your graph
-    #     G=nx.from_pandas_edgelist(df, 'from', 'to')
-        
-    #     # Plot it
-    #     nx.draw(G, with_labels=True)
-    #     plt.show()
     print()
+        
+    # graphs = generate_random_graphs(2, 0.5, True)
+    # for graph_i, graph in enumerate(graphs):
+    #     perform_test(graph, "Random Size {}".format(len(graph)))
+        
+    # print()
+
+    # graphs = generate_random_graphs(2, 0.25, True)
+    # for graph_i, graph in enumerate(graphs):
+    #     perform_test(graph, "Random Size {}".format(len(graph)))
+        
+    # print()

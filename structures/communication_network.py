@@ -73,6 +73,7 @@ class DirectCommunication(IdManager):
         if self.adj_matrix[u][v]:
             # HAVE TO CLONE to keep hops accurate.
             packet = packet.clone()
+            # Time to travel is inverse of weight
             packet.inc(self.adj_matrix[u][v]) # Inc hops proportional to weight of edge
             self.manager.node_dict[node_id].in_queue.append(PacketMeta(packet, self._current_id, node_id))
         

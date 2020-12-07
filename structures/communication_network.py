@@ -99,7 +99,10 @@ class BroadcastNode():
         while len(self.in_queue):
             packet_meta = self.in_queue.pop(0)
             packet = packet_meta.unwrap()
-            if (packet.source_id not in self.route_t or
+            if (packet.source_id == self.id):
+                # Dont resend or update table for own packet
+                pass
+            elif (packet.source_id not in self.route_t or
                 self.route_t[packet.source_id][1] > packet.hops):
                 self.route_t[packet.source_id] = (packet_meta.from_id, packet.hops)
                 

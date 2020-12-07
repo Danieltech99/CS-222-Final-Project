@@ -64,11 +64,13 @@ def floydWarshallCenter(graph, print_stats = False):
     dist = floydWarshall(graph, print_stats)
     N = len(dist)
     longest_shortest_path = [max([(dist,i) for j, dist in enumerate(dist[i]) if i != j], key=lambda o: o[0]) for i in range(N)]
-    center = min(longest_shortest_path, key=lambda o: o[0])
+    print("FW longest shwrtest", longest_shortest_path)
+    center_min = min(longest_shortest_path, key=lambda o: o[0])[0]
+    center = [o[1] for o in longest_shortest_path if o[0] == center_min]
     diameter = max(longest_shortest_path, key=lambda o: o[0])
     if print_stats: 
         print("Found center node: {} with distance: {}, diameter: {}, radius: {}".format(center[1], center[0], diameter[0],  center[0]))
-    return center[1], center[0], diameter[0]
+    return center, center_min, diameter[0]
 
   
 if __name__ == "__main__":

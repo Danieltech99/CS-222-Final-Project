@@ -13,19 +13,54 @@ from algorithms.prims import Graph as PrimGraph
 from algorithms.specify import SpecifySmallStep
 from algorithms.centerrank import centerrank
 import random
+from structures.communication_network import DirectCommunication, BroadcastNode, IdManager
+import pandas as pd
+import networkx as nx
 
 INF  = 99999
+
+
+def random_graph(size):
+    graph = np.array([np.array([0 if i == j else 1 for j in range(size)]) for i in range(size)])
+    tree = SpecifySmallStep(graph).create_graph(0.5, bound="one")
+    return tree
 
 def generate_random_graphs(n):
     # Generate fully connected
     graphs = []
     for i in range(n):
         size = (i + 1) * 5
-        graph = np.array([np.array([0 if i == j else 1 for j in range(size)]) for i in range(size)])
-        tree = SpecifySmallStep(graph).create_graph(0.5, bound="one")
+        tree = random_graph(size)
         # print(tree)
         graphs.append(tree)
     return graphs
+
+
+def evaluate_broadcast(graph):
+    # Setup flock
+    nodes = [BroadcastNode() for i in range(len(graph))]
+    manager = IdManager(graph, nodes)
+    for node in nodes:
+        node.set_communicator(DirectCommunication(graph, node.id, manager))
+
+    # Fill routing table
+    for node in nodes:
+        node.broadcast()
+    t_steps = 0
+    while(sum(len(node.in_queue) for node in nodes)):
+        # print("in process", sum(len(node.in_queue) for node in nodes))
+        t_steps += 1
+        for node in nodes: node.process()
+    
+    print("took t={} to complete broadcast".format(t_steps))
+
+    longest_route = [max(((manager.get_index(node.id), path[1]) for path in node.route_t.values()), key=lambda t: t[1]) for node in nodes]
+    print("routes", longest_route)
+    center_min = min(longest_route, key=lambda o: o[1])[1]
+    center = [o[0] for o in longest_route if o[1] == center_min]
+
+    return center
+
 
 if __name__ == "__main__":
     
@@ -49,10 +84,10 @@ if __name__ == "__main__":
     # Run Simulations
     # 
 
-    dash = '-' * 40
-    columns = ["Formation", "Predicted Center", "Predicted Min", "Predicted Max", "Center", "Radius", "Diameter"]
+    dash = '-' * 100
+    columns = ["Formation", "Test Result", "Predicted", "Center", "R", "D"]
     print(dash)
-    print('{:<24s}{:<16s}{:<16s}{:<16s}{:<16s}{:<16s}{:<16s}'.format(*columns))
+    print('{:<24s}{:<16s}{:<24s}{:<24s}{:<4s}{:<4s}'.format(*columns))
     print(dash)
 
     # Preload classes to allow decision tree to make only once
@@ -70,20 +105,40 @@ if __name__ == "__main__":
         # print("formatted")
         # print_graph(formatted)
         center, radius, diameter = floydWarshallCenter(formatted)
+        predicted = evaluate_broadcast(graph)
+        result = ""
+        # If not predicted any false and at least one element in predicted also in true
+        if (len(set(predicted) - set(center)) == 0 and len(set(center).intersection(predicted)) > 0): result = "SUCCESS"
 
-        ranks = centerrank(graph)
-        eranks = [(i,v) for i,v in enumerate(ranks)]
-        print("eranks", eranks)
-        print('{:<24s}{:<16d}{:<16d}{:<16d}{:<16d}{:<16d}{:<16d}'.format(name, 0, min(eranks, key=lambda o: o[1])[0], max(eranks, key=lambda o: o[1])[0], center, radius, diameter))
+        print('{:<24s}{:<16s}{:<24s}{:<24s}{:<4d}{:<4d}'.format(name, result, str(predicted), str(center), radius, diameter))
+        print()
 
     alg_results = OrderedDict()
-    for formation in forms:
-        for key in ["full", "tree"]:
-            perform_test(formation[key], formation["name"] + " " + key)
+    # for formation in forms:
+    #     for key in ["full", "tree"]:
+    #         perform_test(formation[key], formation["name"] + " " + key)
     
-    print()
+    # print()
         
     graphs = generate_random_graphs(5)
-    for graph in graphs:
+    for graph_i, graph in enumerate(graphs):
         perform_test(graph, "Random Size {}".format(len(graph)))
+        
+        # from_edges = []
+        # to_edges = []
+        # # for u in range(len(graph)):
+        #     for v in range(len(graph)):
+        #         if graph[u][v]:
+        #             from_edges.append(u)
+        #             to_edges.append(v)
+        # Build a dataframe with 4 connections
+        # df = pd.DataFrame({ 'from':from_edges, 'to':to_edges})
+        # df
+        
+        # Build your graph
+    #     G=nx.from_pandas_edgelist(df, 'from', 'to')
+        
+    #     # Plot it
+    #     nx.draw(G, with_labels=True)
+    #     plt.show()
     print()

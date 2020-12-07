@@ -6,10 +6,11 @@ import sys
   
 # Define infinity as the large enough value. This value will be 
 # used for vertices not connected to each other 
-INF  = sys.maxsize
+# Cant use max bc of addition overflow
+INF  = 99999
   
 # Solves all pair shortest path via Floyd Warshall Algorithm 
-def floydWarshall(graph): 
+def floydWarshall(graph, print_log = False): 
     V = len(graph)
   
     """ dist[][] will be the output matrix that will finally 
@@ -42,7 +43,7 @@ def floydWarshall(graph):
                 # If vertex k is on the shortest path from  
                 # i to j, then update the value of dist[i][j] 
                 dist[i][j] = min(dist[i][j], dist[i][k]+ dist[k][j]) 
-    printSolution(dist) 
+    if print_log: printSolution(dist) 
     return dist
   
 
@@ -59,15 +60,15 @@ def printSolution(dist):
             if j == V-1: 
                 print("")
   
-def graphCenter(graph, print_stats = False):
-    dist = floydWarshall(graph)
+def floydWarshallCenter(graph, print_stats = False):
+    dist = floydWarshall(graph, print_stats)
     N = len(dist)
     longest_shortest_path = [max([(dist,i) for j, dist in enumerate(dist[i]) if i != j], key=lambda o: o[0]) for i in range(N)]
     center = min(longest_shortest_path, key=lambda o: o[0])
     diameter = max(longest_shortest_path, key=lambda o: o[0])
     if print_stats: 
         print("Found center node: {} with distance: {}, diameter: {}, radius: {}".format(center[1], center[0], diameter[0],  center[0]))
-    return center[1]
+    return center[1], center[0], diameter[0]
 
   
 if __name__ == "__main__":
@@ -95,7 +96,7 @@ if __name__ == "__main__":
     #     INF      0      3      4
     #     INF    INF      0      1
     #     INF    INF    INF      0
-    graphCenter(graph, True)
+    floydWarshallCenter(graph, True)
     print()
 
     # GeeksforGeeks Tests for Center, etc
@@ -103,7 +104,7 @@ if __name__ == "__main__":
 
     # Center A
     # https://media.geeksforgeeks.org/wp-content/uploads/g3.jpg.jpg
-    graphCenter([ 
+    floydWarshallCenter([ 
         [0, 1, 1, 1, 1],
         [1, 0, INF, INF, INF],
         [1, INF, 0, INF, INF],
@@ -114,7 +115,7 @@ if __name__ == "__main__":
     # Radius 2
     # Diameter 3
     # https://media.geeksforgeeks.org/wp-content/uploads/g2-7.png
-    graphCenter([
+    floydWarshallCenter([
         [0, INF, 1, INF, INF, INF, INF],
         [INF, 0, 1, INF, INF, INF, INF],
         [1, 1, 0, 1, 1, 1, INF],

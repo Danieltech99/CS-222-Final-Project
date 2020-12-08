@@ -13,7 +13,9 @@ from algorithms.prims import Graph as PrimGraph
 from algorithms.specify import SpecifySmallStep
 from algorithms.centerrank import centerrank
 import random
-from structures.communication_network import DirectCommunication, BroadcastNode, IdManager
+from structures.communication_network import NeighborCommunication, BroadcastNode
+from structures.noisy_communication_network import NoisyNeighborCommunication, NoisyBroadcastNode, NoisyEnvironment
+from structures.id_manager import IdManager
 import pandas as pd
 import networkx as nx
 
@@ -53,7 +55,7 @@ def evaluate_broadcast(graph):
     nodes = [BroadcastNode() for i in range(len(graph))]
     manager = IdManager(graph, nodes)
     for node in nodes:
-        node.set_communicator(DirectCommunication(graph, node.id, manager))
+        node.set_communicator(NeighborCommunication(graph, node.id, manager))
 
     # Fill routing table
     for node in nodes:
@@ -63,6 +65,39 @@ def evaluate_broadcast(graph):
         # print("in process", sum(len(node.in_queue) for node in nodes))
         t_steps += 1
         for node in nodes: node.process()
+    
+    print("took t={} to complete broadcast".format(t_steps))
+
+    longest_route = [max(((manager.get_index(node.id), path[1]) for path in node.route_t.values()), key=lambda t: t[1]) for node in nodes]
+    # print("processed ", [(node.id, node.packets_processed) for node in nodes])
+    # print("sent ", [(node.id, node.packets_sent) for node in nodes])
+    # print("total processed ", sum([node.packets_processed for node in nodes]))
+    # print("total sent ", sum([node.packets_sent for node in nodes]))
+    # print("routes", longest_route)
+    # print("routes for 0", nodes[0].route_t)
+    center_min = min(longest_route, key=lambda o: o[1])[1]
+    center = [o[0] for o in longest_route if o[1] == center_min]
+
+    return center
+
+
+def evaluate_noisy_broadcast(graph):
+    # Setup flock
+    nodes = [NoisyBroadcastNode() for i in range(len(graph))]
+    manager = IdManager(graph, nodes)
+    env = NoisyEnvironment(manager)
+    for node in nodes:
+        node.set_communicator(NoisyNeighborCommunication(graph, node.id, manager, env))
+
+    # Fill routing table
+    for node in nodes:
+        node.broadcast()
+    t_steps = 0
+    while(len(env.packet_queue)):
+        # print("in process", sum(len(node.in_queue) for node in nodes))
+        # t_steps += 1
+        env.run()
+    t_steps = env.time
     
     print("took t={} to complete broadcast".format(t_steps))
 
@@ -122,7 +157,7 @@ if __name__ == "__main__":
         # print("formatted")
         # print_graph(formatted)
         center, radius, diameter = floydWarshallCenter(formatted)
-        predicted = evaluate_broadcast(graph)
+        predicted = evaluate_noisy_broadcast(graph)
         result = ""
         # If not predicted any false and at least one element in predicted also in true
         if (len(set(predicted) - set(center)) == 0 and len(set(center).intersection(predicted)) > 0): result = "SUCCESS"

@@ -1,5 +1,7 @@
 import time
 
+from structures.id_manager import IdManager
+
 packet_id_inc = 1
 class Packet():
     type = "packet"
@@ -16,13 +18,13 @@ class Packet():
     
     # Can also be switched to time in transit 
     # ... (sum of time being communicated, not including processing)
-    hops = 0
+    t_in_transit = 0
     def inc(self, weight = 1):
-        self.hops += weight
+        self.t_in_transit += weight
 
     def clone(self):
         packet_copy = Packet(self.data, self.source_id, self.target_id)
-        packet_copy.hops = self.hops
+        packet_copy.t_in_transit = self.t_in_transit
         return packet_copy
 
 class PacketMeta():
@@ -43,25 +45,9 @@ class ACK(Packet):
 class Node():
     def __init__(self):
         self.in_queue = []
-
-class IdManager():
-    def __init__(self, adj_matrix, nodes):
-        # Assign nodes ids for removals and additions
-        assert(len(nodes) == len(adj_matrix))
-        for i in range(len(nodes)):
-            nodes[i].id = i
-        if len(nodes) > 1: assert(nodes[0].id != nodes[1].id)
-        self.ordered_ids = [node.id for node in nodes]
-        self.node_dict = {node.id:node for node in nodes}
     
-    def get_id(self, node_index):
-        return self.ordered_ids[node_index]
-    
-    # Private Methods
-    def get_index(self, node_id):
-        return self.ordered_ids.index(node_id)
 
-class DirectCommunication(IdManager):
+class NeighborCommunication(IdManager):
     packets_sent = 0
     def __init__(self, adj_matrix, current_id, manager):
         self.manager = manager
@@ -73,10 +59,10 @@ class DirectCommunication(IdManager):
         u, v = self.manager.get_index(self._current_id), self.manager.get_index(node_id)
         if self.adj_matrix[u][v]:
             self.packets_sent += 1
-            # HAVE TO CLONE to keep hops accurate.
+            # HAVE TO CLONE to keep t_in_transit accurate.
             packet = packet.clone()
             # Time to travel is inverse of weight
-            packet.inc(self.adj_matrix[u][v]) # Inc hops proportional to weight of edge
+            packet.inc(self.adj_matrix[u][v]) # Inc t_in_transit proportional to weight of edge
             self.manager.node_dict[node_id].in_queue.append(PacketMeta(packet, self._current_id, node_id))
         
     def get_neighbor_ids(self):
@@ -93,7 +79,7 @@ class BroadcastNode():
     packets_sent = 0
     def __init__(self):
         self.in_queue = []
-        # Format {target_id: (route_node, route_hops)}
+        # Format {target_id: (route_node, route_t_in_transit)}
         self.route_t = {}
 
     def set_communicator(self,communicator):
@@ -108,8 +94,8 @@ class BroadcastNode():
                 # Dont resend or update table for own packet
                 pass
             elif (packet.source_id not in self.route_t or
-                self.route_t[packet.source_id][1] > packet.hops):
-                self.route_t[packet.source_id] = (packet_meta.from_id, packet.hops)
+                self.route_t[packet.source_id][1] > packet.t_in_transit):
+                self.route_t[packet.source_id] = (packet_meta.from_id, packet.t_in_transit)
                 
                 # Arrived
                 if packet.target_id == self.id:
@@ -122,7 +108,6 @@ class BroadcastNode():
                         if neighbor != packet_meta.from_id:
                             self.packets_sent += 1
                             self.com.send(neighbor, packet)
-                
             else:
                 # Already recieved packet and slower path
                 pass

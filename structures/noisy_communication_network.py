@@ -63,7 +63,7 @@ class NoisyEnvironment():
     def run(self):
         packet_meta = self.packet_queue.pop(0)
         # fast forward time until time of next arrival
-        time = packet_meta.time_of_arrival
+        self.time = packet_meta.time_of_arrival
         self.manager.node_dict[packet_meta.to_id].process(packet_meta)
 
     def queue(self, packet_meta, time_in_travel):

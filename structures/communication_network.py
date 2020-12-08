@@ -62,6 +62,7 @@ class IdManager():
         return self.ordered_ids.index(node_id)
 
 class DirectCommunication(IdManager):
+    packets_sent = 0
     def __init__(self, adj_matrix, current_id, manager):
         self.manager = manager
         self.adj_matrix = adj_matrix
@@ -71,6 +72,7 @@ class DirectCommunication(IdManager):
         assert(node_id != self._current_id)
         u, v = self.manager.get_index(self._current_id), self.manager.get_index(node_id)
         if self.adj_matrix[u][v]:
+            self.packets_sent += 1
             # HAVE TO CLONE to keep hops accurate.
             packet = packet.clone()
             # Time to travel is inverse of weight
@@ -87,6 +89,8 @@ class DirectCommunication(IdManager):
 
 class BroadcastNode():
     id = None
+    packets_processed = 0
+    packets_sent = 0
     def __init__(self):
         self.in_queue = []
         # Format {target_id: (route_node, route_hops)}
@@ -96,6 +100,7 @@ class BroadcastNode():
         self.com = communicator
 
     def process(self):
+        self.packets_processed += len(self.in_queue)
         while len(self.in_queue):
             packet_meta = self.in_queue.pop(0)
             packet = packet_meta.unwrap()
@@ -115,6 +120,7 @@ class BroadcastNode():
                     for neighbor in self.com.get_neighbor_ids():
                         # don't send back to sender
                         if neighbor != packet_meta.from_id:
+                            self.packets_sent += 1
                             self.com.send(neighbor, packet)
                 
             else:
@@ -124,6 +130,7 @@ class BroadcastNode():
     def broadcast(self):
         for neighbor in self.com.get_neighbor_ids():
             # Broadcast empty packet with no destination
+            self.packets_sent += 1
             self.com.send(neighbor, Packet(None, self.id, None))
 
     def setup(self):

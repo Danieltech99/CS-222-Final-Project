@@ -67,7 +67,12 @@ def evaluate_broadcast(graph):
     print("took t={} to complete broadcast".format(t_steps))
 
     longest_route = [max(((manager.get_index(node.id), path[1]) for path in node.route_t.values()), key=lambda t: t[1]) for node in nodes]
-    print("routes", longest_route)
+    # print("processed ", [(node.id, node.packets_processed) for node in nodes])
+    # print("sent ", [(node.id, node.packets_sent) for node in nodes])
+    # print("total processed ", sum([node.packets_processed for node in nodes]))
+    # print("total sent ", sum([node.packets_sent for node in nodes]))
+    # print("routes", longest_route)
+    # print("routes for 0", nodes[0].route_t)
     center_min = min(longest_route, key=lambda o: o[1])[1]
     center = [o[0] for o in longest_route if o[1] == center_min]
 
@@ -126,29 +131,29 @@ if __name__ == "__main__":
         print()
 
     alg_results = OrderedDict()
-    # for formation in forms:
-    #     for key in ["full", "tree"]:
-    #         perform_test(formation[key], formation["name"] + " " + key)
+    for formation in forms:
+        for key in ["full", "tree"]:
+            perform_test(formation[key], formation["name"] + " " + key)
     
-    # print()
+    print()
 
-    # graphs = generate_random_graphs(5, 0.75)
-    # for graph_i, graph in enumerate(graphs):
-    #     perform_test(graph, "Random Size {}".format(len(graph)))
+    graphs = generate_random_graphs(5, 0.75)
+    for graph_i, graph in enumerate(graphs):
+        perform_test(graph, "Random Size {}".format(len(graph)))
         
-    # print()
+    print()
         
-    # graphs = generate_random_graphs(5)
-    # for graph_i, graph in enumerate(graphs):
-    #     perform_test(graph, "Random Size {}".format(len(graph)))
+    graphs = generate_random_graphs(5)
+    for graph_i, graph in enumerate(graphs):
+        perform_test(graph, "Random Size {}".format(len(graph)))
         
-    # print()
+    print()
 
-    # graphs = generate_random_graphs(5, 0.25)
-    # for graph_i, graph in enumerate(graphs):
-    #     perform_test(graph, "Random Size {}".format(len(graph)))
+    graphs = generate_random_graphs(5, 0.25)
+    for graph_i, graph in enumerate(graphs):
+        perform_test(graph, "Random Size {}".format(len(graph)))
         
-    # print()
+    print()
 
     print("RANDOM GRAPHS:")
 
@@ -160,14 +165,14 @@ if __name__ == "__main__":
         
     print()
         
-    # graphs = generate_random_graphs(2, 0.5, True)
-    # for graph_i, graph in enumerate(graphs):
-    #     perform_test(graph, "Random Size {}".format(len(graph)))
+    graphs = generate_random_graphs(2, 0.5, True)
+    for graph_i, graph in enumerate(graphs):
+        perform_test(graph, "Random Size {}".format(len(graph)))
         
-    # print()
+    print()
 
-    # graphs = generate_random_graphs(2, 0.25, True)
-    # for graph_i, graph in enumerate(graphs):
-    #     perform_test(graph, "Random Size {}".format(len(graph)))
+    graphs = generate_random_graphs(2, 0.25, True)
+    for graph_i, graph in enumerate(graphs):
+        perform_test(graph, "Random Size {}".format(len(graph)))
         
-    # print()
+    print()

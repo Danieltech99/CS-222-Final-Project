@@ -14,7 +14,7 @@ from algorithms.specify import SpecifySmallStep
 from algorithms.centerrank import centerrank
 import random
 from structures.communication_network import NeighborCommunication, BroadcastNode
-from structures.noisy_communication_network import NoisyNeighborCommunication, NoisyBroadcastNode, NoisyEnvironment
+from structures.timed_communication_network import TimedNeighborCommunication, TimedBroadcastNode, TimedEnvironment
 from structures.id_manager import IdManager
 import pandas as pd
 import networkx as nx
@@ -83,11 +83,11 @@ def evaluate_broadcast(graph):
 
 def evaluate_noisy_broadcast(graph):
     # Setup flock
-    nodes = [NoisyBroadcastNode() for i in range(len(graph))]
+    nodes = [TimedBroadcastNode() for i in range(len(graph))]
     manager = IdManager(graph, nodes)
-    env = NoisyEnvironment(manager)
+    env = TimedEnvironment(manager)
     for node in nodes:
-        node.set_communicator(NoisyNeighborCommunication(graph, node.id, manager, env))
+        node.set_communicator(TimedNeighborCommunication(graph, node.id, manager, env))
 
     # Fill routing table
     for node in nodes:

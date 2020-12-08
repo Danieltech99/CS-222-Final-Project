@@ -4,6 +4,7 @@ import numpy as np
 
 from structures.id_manager import IdManager
 
+
 packet_id_inc = 1
 class Packet():
     type = "packet"
@@ -54,7 +55,7 @@ class Node():
         pass
 
 
-class NoisyEnvironment():
+class TimedEnvironment():
     packet_queue = []
     time = 0
     def __init__(self, manager):
@@ -71,7 +72,7 @@ class NoisyEnvironment():
         bisect.insort(self.packet_queue, packet_meta)
 
 
-class NoisyNeighborCommunication(IdManager):
+class TimedNeighborCommunication(IdManager):
     packets_sent = 0
     def __init__(self, adj_matrix, current_id, manager, env):
         self.manager = manager
@@ -86,10 +87,8 @@ class NoisyNeighborCommunication(IdManager):
             self.packets_sent += 1
             # HAVE TO CLONE to keep t_in_transit accurate.
             packet = packet.clone()
-            # Time to travel is inverse of weight
-            mu, sigma = self.adj_matrix[u][v], 0.1 # mean and standard deviation
-            time_in_travel = np.random.normal(mu, sigma)
-            if time_in_travel == 0: time_in_travel = 0.5
+            # Higher weight means more travel time
+            time_in_travel = self.adj_matrix[u][v]
             packet.inc(time_in_travel) # Inc t_in_transit proportional to weight of edge
             self.env.queue(PacketMeta(packet, self._current_id, node_id), time_in_travel)
         
@@ -101,7 +100,7 @@ class NoisyNeighborCommunication(IdManager):
         neighbors_ids = [self.manager.get_id(i) for i in neighbors_indexes]
         return neighbors_ids
 
-class NoisyBroadcastNode():
+class TimedBroadcastNode():
     id = None
     packets_processed = 0
     packets_sent = 0

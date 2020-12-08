@@ -13,7 +13,7 @@ class Packet():
         self.id = packet_id_inc
         packet_id_inc += 1
 
-        # self.created_at = time.time()
+        self.created_at = time.time()
         self.data = data
 
         self.source_id = source_id
@@ -27,6 +27,7 @@ class Packet():
 
     def clone(self):
         packet_copy = Packet(self.data, self.source_id, self.target_id)
+        packet_copy.created_at = self.created_at
         packet_copy.t_in_transit = self.t_in_transit
         return packet_copy
 
@@ -83,6 +84,7 @@ class TimedNeighborCommunication(IdManager):
     def send(self, node_id, packet):
         assert(node_id != self._current_id)
         u, v = self.manager.get_index(self._current_id), self.manager.get_index(node_id)
+        assert(self.adj_matrix[u][v] > 0)
         if self.adj_matrix[u][v]:
             self.packets_sent += 1
             # HAVE TO CLONE to keep t_in_transit accurate.
@@ -100,48 +102,116 @@ class TimedNeighborCommunication(IdManager):
         neighbors_ids = [self.manager.get_id(i) for i in neighbors_indexes]
         return neighbors_ids
 
+
+
+
 class TimedBroadcastNode():
     id = None
     packets_processed = 0
     packets_sent = 0
-    def __init__(self):
+    leader = []
+    def __init__(self, initial_flock_size):
         # in queue handled by environment
+        # flock size for handling initial updates
+        self.initial_flock_size = initial_flock_size
         # Format {target_id: (route_node, route_t_in_transit)}
         self.route_t = {}
+        # Format {node_id: (longest_shortest_path_length, timestamp)}
+        self.flock_lsp = {}
 
     def set_communicator(self,communicator):
         self.com = communicator
 
+    def share_longest_shortest_path(self):
+        has_routes_to = [o for o in self.route_t.items() if o[1] is not None]
+        if len(list(has_routes_to)) == 0: return
+        data = {
+            "type": "longest_shortest_path_update",
+            "value": max(has_routes_to, key=lambda entry: entry[1][1])[1][1]
+        }
+        # Instantiate outside of loop
+        # ... so that all have the same timestamp
+        p = Packet(data, self.id, None)
+        self.flock_lsp[self.id] = (data["value"],p.created_at)
+        for (t,(neighbor, r_time)) in list(has_routes_to):
+            indv_packet = p.clone()
+            indv_packet.target_id = t
+            self.com.send(neighbor, indv_packet)
+
+    def consider_routing_update(self, packet_meta):
+        packet = packet_meta.unwrap()
+        # Don't add self to routing table
+        if (packet.source_id == self.id): return False
+        # If not in routing table
+        # or this is a shorter route
+        if (
+                packet.source_id not in self.route_t or
+                self.route_t[packet.source_id][1] > packet.t_in_transit
+            ):
+            # Update routing table
+            self.route_t[packet.source_id] = (packet_meta.from_id, packet.t_in_transit)
+            
+            # Tell all neighbors of updated shortest path
+            has_routes_to = [o for o in self.route_t.items() if o[1] is not None]
+            # print("has {} compared to {}".format(len(list(has_routes_to)), self.initial_flock_size - 1))
+            # Saves proportional to diameter
+            if len(list(has_routes_to)) >= self.initial_flock_size - 1:
+                self.share_longest_shortest_path()
+            return True
+        return False
+
+    def update_leader(self):
+        slsp = min(lsp for (lsp, _) in self.flock_lsp.values())
+        self.leader = [id for id,(lsp,_) in self.flock_lsp.items() if lsp == slsp]
+
+    def handle_longest_shortest_path_update(self,packet):
+        # Update if not in table or if update created later in time
+        if (packet.source_id == self.id): return False
+        if (
+                packet.source_id not in self.flock_lsp or
+                self.flock_lsp[packet.source_id][1] < packet.created_at
+            ):
+            self.flock_lsp[packet.source_id] = (packet.data["value"], packet.created_at)
+            self.update_leader()
+            return True
+        return False
+
+    def handle(self, packet):
+        if packet.data["type"] == "longest_shortest_path_update":
+            self.handle_longest_shortest_path_update(packet)
+
     def process(self, packet_meta):
         # environment gives packet, instead of agent requesting
         packet = packet_meta.unwrap()
-        if (packet.source_id == self.id):
-            # Dont resend or update table for own packet
-            pass
-        elif (packet.source_id not in self.route_t or
-            self.route_t[packet.source_id][1] > packet.t_in_transit):
-            self.route_t[packet.source_id] = (packet_meta.from_id, packet.t_in_transit)
+        route_updated = self.consider_routing_update(packet_meta)
             
-            # Arrived
-            if packet.target_id == self.id:
-                # Terminate
-                pass
-            else:
-                # Rebroadcast in case shorter for others (inspiration Dijkstra)
-                for neighbor in self.com.get_neighbor_ids():
-                    # don't send back to sender
-                    if neighbor != packet_meta.from_id:
-                        self.packets_sent += 1
-                        self.com.send(neighbor, packet)
-        else:
-            # Already recieved packet and slower path
+        # Arrived
+        if packet.target_id == self.id:
+            # Terminate
+            self.handle(packet)
             pass
-                
-    def broadcast(self):
-        for neighbor in self.com.get_neighbor_ids():
-            # Broadcast empty packet with no destination
+        else:
+            # Pass packet along 
+            self.forward(packet_meta, route_updated)
+
+    def forward(self, packet_meta, route_updated):
+        packet = packet_meta.unwrap()
+        # If target is None, then broadcast
+        # Similar to 0.0.0.0
+        if packet.target_id is None and route_updated:
+            self.broadcast(packet, packet_meta)
+        # Otherwise, forward according to shortest path in routing table
+        elif packet.target_id:
             self.packets_sent += 1
-            self.com.send(neighbor, Packet(None, self.id, None))
+            self.com.send(self.route_t[packet.target_id][0], packet)
+                
+    def broadcast(self, packet, packet_meta = None):
+        # Send to all neighbors
+        for neighbor in self.com.get_neighbor_ids():
+            # don't send back to sender
+            if not packet_meta or neighbor != packet_meta.from_id:
+                self.packets_sent += 1
+                self.com.send(neighbor, packet)
 
     def setup(self):
-        self.broadcast()
+        self.broadcast(Packet(None, self.id, None))

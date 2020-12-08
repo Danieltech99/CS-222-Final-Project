@@ -83,7 +83,8 @@ def evaluate_broadcast(graph):
 
 def evaluate_noisy_broadcast(graph):
     # Setup flock
-    nodes = [TimedBroadcastNode() for i in range(len(graph))]
+    flock_size = len(graph)
+    nodes = [TimedBroadcastNode(flock_size) for i in range(flock_size)]
     manager = IdManager(graph, nodes)
     env = TimedEnvironment(manager)
     for node in nodes:
@@ -91,7 +92,7 @@ def evaluate_noisy_broadcast(graph):
 
     # Fill routing table
     for node in nodes:
-        node.broadcast()
+        node.setup()
     t_steps = 0
     while(len(env.packet_queue)):
         # print("in process", sum(len(node.in_queue) for node in nodes))
@@ -101,17 +102,20 @@ def evaluate_noisy_broadcast(graph):
     
     print("took t={} to complete broadcast".format(t_steps))
 
-    longest_route = [max(((manager.get_index(node.id), path[1]) for path in node.route_t.values()), key=lambda t: t[1]) for node in nodes]
+    # Assert all equal
+    center = set(manager.get_index(leader) for leader in node.leader)
+    for i,node in enumerate(nodes):
+        if i != 0:
+            leader_set = set(manager.get_index(leader) for leader in node.leader)
+            assert(len(center.symmetric_difference(leader_set)) == 0)
     # print("processed ", [(node.id, node.packets_processed) for node in nodes])
     # print("sent ", [(node.id, node.packets_sent) for node in nodes])
-    # print("total processed ", sum([node.packets_processed for node in nodes]))
-    # print("total sent ", sum([node.packets_sent for node in nodes]))
+    print("total processed ", sum([node.packets_processed for node in nodes]))
+    print("total sent ", sum([node.packets_sent for node in nodes]))
     # print("routes", longest_route)
     # print("routes for 0", nodes[0].route_t)
-    center_min = min(longest_route, key=lambda o: o[1])[1]
-    center = [o[0] for o in longest_route if o[1] == center_min]
 
-    return center
+    return list(center)
 
 
 if __name__ == "__main__":
@@ -160,7 +164,7 @@ if __name__ == "__main__":
         predicted = evaluate_noisy_broadcast(graph)
         result = ""
         # If not predicted any false and at least one element in predicted also in true
-        if (len(set(predicted) - set(center)) == 0 and len(set(center).intersection(predicted)) > 0): result = "SUCCESS"
+        if (len(set(predicted).symmetric_difference(center)) == 0): result = "SUCCESS"
 
         print('{:<24s}{:<16s}{:<24s}{:<24s}{:<4d}{:<4d}'.format(name, result, str(predicted), str(center), radius, diameter))
         print()

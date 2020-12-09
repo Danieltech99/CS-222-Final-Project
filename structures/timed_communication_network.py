@@ -149,8 +149,7 @@ class Node():
     local_timestamp = 0
     def __init__(self, initial_flock_size):
         # in queue handled by environment
-        # flock size for handling initial updates
-        self.initial_flock_size = initial_flock_size
+
         # Format {target_id: (route_node, route_length, route_broadcast_timestamp)}
         self.route_t = {}
         # Format {node_id: (longest_shortest_path_length, timestamp)}
@@ -197,8 +196,11 @@ class Node():
         removed = self.last_neighbor_ids - self.neighbor_ids
         intersection = self.last_neighbor_ids.intersection(self.neighbor_ids)
         # Create dict of weight changes, not including links that stayed the same
-        updated = {self.neighbor_weights[id] - self.last_neighbor_weights[id] for id in intersection if self.neighbor_weights[id] - self.last_neighbor_weights[id] != 0}
-        return added,removed,updated
+        updated = {id for id in intersection if self.neighbor_weights[id] - self.last_neighbor_weights[id] != 0}
+        # For updated edge, broadcast remove and add
+        added |= updated
+        removed |= updated
+        return added,removed
 
     def setup(self):
         self.refresh_neighbors()
@@ -430,17 +432,18 @@ class TimedBroadcastNode(Node):
         return True
 
 
-    def handle_updated_edges(self, updated_edges):
-        if not len(updated_edges): return
+    # def handle_updated_edges(self, updated_edges):
+    #     if not len(updated_edges): return
 
     def detect(self):
         self.refresh_neighbors()
 
         # detect if changes 
-        added,removed,updated = self.compare_neighbors()
-        if len(added): self.handle_added_edges(added)
+        added,removed = self.compare_neighbors()
+        # For updated edge, broadcast remove and add
+        # if len(updated): self.handle_updated_edges(updated)
         if len(removed): self.handle_removed_edges(removed)
-        if len(updated): self.handle_updated_edges(updated)
+        if len(added): self.handle_added_edges(added)
 
         self.refresh_neighbors_history()
 

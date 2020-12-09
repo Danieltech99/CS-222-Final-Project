@@ -29,6 +29,7 @@ class Packet():
         packet_copy = Packet(self.data, self.source_id, self.target_id)
         packet_copy.created_at = self.created_at
         packet_copy.t_in_transit = self.t_in_transit
+        packet_copy.local_timestamp = self.local_timestamp
         return packet_copy
 
 class PacketMeta():
@@ -50,10 +51,7 @@ class PacketMeta():
     def unwrap(self):
         return self.packet
 
-class Node():
-    def __init__(self):
-        # in queue handled by environment
-        pass
+
 
 
 class TimedEnvironment():
@@ -88,7 +86,7 @@ class TimedNeighborCommunication(IdManager):
         self.env = env
         self._current_id = current_id
 
-    def send(self, node_id, packet, offset):
+    def send(self, node_id, packet):
         assert(node_id != self._current_id)
         u, v = self.manager.get_index(self._current_id), self.manager.get_index(node_id)
         assert(self.env.adj_matrix[u][v] > 0)
@@ -139,58 +137,113 @@ class DynamicTimedEnvironment(TimedEnvironment):
         return self
 
 
-class TimedBroadcastNode():
+
+# Seperated for ease of coding/organization and seperation of concerns
+
+class Node():
     id = None
     packets_processed = 0
     packets_sent = 0
     leader = []
+    local_timestamp = 0
     def __init__(self, initial_flock_size):
         # in queue handled by environment
         # flock size for handling initial updates
         self.initial_flock_size = initial_flock_size
-        # Format {target_id: (route_node, route_t_in_transit)}
+        # Format {target_id: (route_node, route_length, route_broadcast_timestamp)}
         self.route_t = {}
         # Format {node_id: (longest_shortest_path_length, timestamp)}
         self.flock_lsp = {}
-
+    
     def set_communicator(self,communicator):
         self.com = communicator
+
+    def forward(self, packet_meta, route_updated):
+        packet = packet_meta.unwrap()
+        # If target is None, then broadcast
+        # Similar to 0.0.0.0
+        if packet.target_id is None and route_updated:
+            self.broadcast(packet, packet_meta)
+        # Otherwise, forward according to shortest path in routing table
+        elif packet.target_id:
+            self.packets_sent += 1
+            self.send(self.route_t[packet.target_id][0], packet)
+
+    def send(self, neighbor, packet):
+        packet.local_timestamp = self.local_timestamp
+        self.com.send(neighbor, packet)
+                
+    def broadcast(self, packet, packet_meta = None, dont_send_to = []):
+        # Send to all neighbors
+        for neighbor,_ in self.com.get_neighbor_ids():
+            # don't send back to sender
+            if not packet_meta or neighbor != packet_meta.from_id:
+                if neighbor not in dont_send_to:
+                    self.packets_sent += 1
+                    self.send(neighbor, packet)
+
+    def refresh_neighbors(self):
+        # Store only ids in set for easier comparison
+        self.neighbor_ids = set(n for n,_ in self.com.get_neighbor_ids())
+        self.neighbor_weights = {n:w for n,w in self.com.get_neighbor_ids()}
+    
+    def refresh_neighbors_history(self):
+        self.last_neighbor_ids = self.neighbor_ids.copy()
+        self.last_neighbor_weights = self.neighbor_weights.copy()
+
+    def compare_neighbors(self):
+        added = self.neighbor_ids - self.last_neighbor_ids
+        removed = self.last_neighbor_ids - self.neighbor_ids
+        intersection = self.last_neighbor_ids.intersection(self.neighbor_ids)
+        # Create dict of weight changes, not including links that stayed the same
+        updated = {self.neighbor_weights[id] - self.last_neighbor_weights[id] for id in intersection if self.neighbor_weights[id] - self.last_neighbor_weights[id] != 0}
+        return added,removed,updated
+
+    def setup(self):
+        self.refresh_neighbors()
+        self.refresh_neighbors_history()
+
+        self.broadcast(Packet(None, self.id, None))
+
+
+
+class TimedBroadcastNode(Node):
 
     def share_longest_shortest_path(self):
         has_routes_to = [o for o in self.route_t.items() if o[1] is not None]
         if len(list(has_routes_to)) == 0: return
         data = {
-            "type": "longest_shortest_path_update",
+            "type": "lsp_update",
             "value": max(has_routes_to, key=lambda entry: entry[1][1])[1][1]
         }
         # Instantiate outside of loop
         # ... so that all have the same timestamp
         p = Packet(data, self.id, None)
+        p.local_timestamp = self.local_timestamp
         self.flock_lsp[self.id] = (data["value"],p.created_at)
-        for (t,(neighbor, r_time)) in list(has_routes_to):
+        for (t,(neighbor, r_time, r_timestamp)) in list(has_routes_to):
             indv_packet = p.clone()
             indv_packet.target_id = t
-            self.com.send(neighbor, indv_packet)
+            self.send(neighbor, indv_packet)
 
     def consider_routing_update(self, packet_meta):
         packet = packet_meta.unwrap()
         # Don't add self to routing table
         if (packet.source_id == self.id): return False
         # If not in routing table
-        # or this is a shorter route
+        # or newer broadcast timestamp
+        # or this is a shorter route but same timestamp
         if (
                 packet.source_id not in self.route_t or
-                self.route_t[packet.source_id][1] > packet.t_in_transit
+                self.route_t[packet.source_id][2] > packet.local_timestamp or
+                (self.route_t[packet.source_id][1] > packet.t_in_transit and self.route_t[packet.source_id][2] == packet.local_timestamp)
             ):
             # Update routing table
-            print("updating {} on vertex {}, was {}".format(packet.source_id, self.id, self.route_t.get(packet.source_id)))
-            self.route_t[packet.source_id] = (packet_meta.from_id, packet.t_in_transit)
+            # print("updating {} on vertex {}, was {}".format(packet.source_id, self.id, self.route_t.get(packet.source_id)))
+            self.route_t[packet.source_id] = (packet_meta.from_id, packet.t_in_transit, packet.local_timestamp)
             
             # Tell all neighbors of updated shortest path
             has_routes_to = [o for o in self.route_t.items() if o[1] is not None]
-            # print("has {} compared to {}".format(len(list(has_routes_to)), self.initial_flock_size - 1))
-            # Saves proportional to diameter
-            # if len(list(has_routes_to)) >= self.initial_flock_size - 1:
             self.share_longest_shortest_path()
             return True
         return False
@@ -213,25 +266,9 @@ class TimedBroadcastNode():
             # Pass packet along 
             self.forward(packet_meta, route_updated)
 
-    def forward(self, packet_meta, route_updated):
-        packet = packet_meta.unwrap()
-        # If target is None, then broadcast
-        # Similar to 0.0.0.0
-        if packet.target_id is None and route_updated:
-            self.broadcast(packet, packet_meta)
-        # Otherwise, forward according to shortest path in routing table
-        elif packet.target_id:
-            self.packets_sent += 1
-            self.com.send(self.route_t[packet.target_id][0], packet)
-                
-    def broadcast(self, packet, packet_meta = None, dont_send_to = []):
-        # Send to all neighbors
-        for neighbor,_ in self.com.get_neighbor_ids():
-            # don't send back to sender
-            if not packet_meta or neighbor != packet_meta.from_id:
-                if neighbor not in dont_send_to:
-                    self.packets_sent += 1
-                    self.com.send(neighbor, packet)
+    
+    def broadcast_routing_table(self):
+        table = self.route_t.copy()
 
 
     def handle_longest_shortest_path_update(self,packet, packet_meta):
@@ -248,9 +285,9 @@ class TimedBroadcastNode():
 
     def handle(self, packet, packet_meta):
         if packet.data is None: return
-        if packet.data["type"] == "longest_shortest_path_update":
+        if packet.data["type"] == "lsp_update":
             self.handle_longest_shortest_path_update(packet, packet_meta)
-        elif packet.data["type"] == "lsp_edges_removed":
+        elif packet.data["type"] == "edges_removed":
             self.handle_removed_edges_update(packet, packet_meta)
 
     def handle_added_edges(self, added_edges):
@@ -270,7 +307,7 @@ class TimedBroadcastNode():
         has_routes_to = [o for o in self.route_t.items() if o[1] is not None]
         if len(list(has_routes_to)) == 0: return
         data = {
-            "type": "lsp_edges_removed",
+            "type": "edges_removed",
             "value": removed_edges
         }
         p = Packet(data, self.id, None)
@@ -309,25 +346,6 @@ class TimedBroadcastNode():
 
         self.refresh_neighbors_history()
 
-    def compare_neighbors(self):
-        added = self.neighbor_ids - self.last_neighbor_ids
-        removed = self.last_neighbor_ids - self.neighbor_ids
-        intersection = self.last_neighbor_ids.intersection(self.neighbor_ids)
-        # Create dict of weight changes, not including links that stayed the same
-        updated = {self.neighbor_weights[id] - self.last_neighbor_weights[id] for id in intersection if self.neighbor_weights[id] - self.last_neighbor_weights[id] != 0}
-        return added,removed,updated
 
-    def refresh_neighbors(self):
-        # Store only ids in set for easier comparison
-        self.neighbor_ids = set(n for n,_ in self.com.get_neighbor_ids())
-        self.neighbor_weights = {n:w for n,w in self.com.get_neighbor_ids()}
-    
-    def refresh_neighbors_history(self):
-        self.last_neighbor_ids = self.neighbor_ids.copy()
-        self.last_neighbor_weights = self.neighbor_weights.copy()
 
-    def setup(self):
-        self.refresh_neighbors()
-        self.refresh_neighbors_history()
 
-        self.broadcast(Packet(None, self.id, None))

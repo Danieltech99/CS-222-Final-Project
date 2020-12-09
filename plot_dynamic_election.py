@@ -70,7 +70,7 @@ def plot_states(node_states, correct, save_name = None):
             lines[j].append(bot_val)
 
     _, ax = plt.subplots()
-    loc = plticker.MultipleLocator(base=1.0) # this locator puts ticks at regular intervals
+    loc = plticker.MultipleLocator(base=(5.0 if len(steps) < 40 else 10.0)) # this locator puts ticks at regular intervals
     ax.xaxis.set_major_locator(loc)
     # Plot correct answer as black dotted line
     num_cc = max([len(y) for _,y in correct])
@@ -86,11 +86,11 @@ def plot_states(node_states, correct, save_name = None):
             true_lines[j].append(bot_val)
     # print("steps",steps)
     # print("true_lines",true_lines)
-    for data in true_lines:
-        line, = ax.plot(steps, data, '--', color = 'black')
     # print("lines",lines)
     for data in lines:
         line, = ax.plot(steps, data)
+    for data in true_lines:
+        line, = ax.plot(steps, data, '-', color = 'black', linewidth=4, marker="*", linestyle = 'None')
     
     plt.legend()
     mkdir_p("figures/leader_election_dynamics")

@@ -35,9 +35,9 @@ formations = [
         "timeline": [
             lambda env: env,
             lambda env: env.remove_edge(1,3).remove_edge(1,4).remove_edge(1,5),
-            lambda env: env.remove_node(2), # Indices change after remove
+            lambda env: env.remove_all_edges(2), # Indices change after remove
             lambda env: env.add_edge(1,3).add_edge(1,4).add_edge(1,5),
-            lambda env: env.add_node(2, 2).add_all_edges(2)
+            lambda env: env.add_all_edges(2)
         ]
     },
 
@@ -64,9 +64,9 @@ formations = [
         "timeline": [
             lambda env: env,
             lambda env: env.remove_edges([(1,0),(1,2)]),
-            lambda env: env.remove_node(5), # Indices change after remove
+            lambda env: env.remove_all_edges(5), # Indices change after remove
             lambda env: env.add_edges([(1,0),(1,2)]),
-            lambda env: env.add_node(5,5).add_edges([(5,3),(5,4),(5,6)])
+            lambda env: env.add_edges([(5,3),(5,4),(5,6)])
         ]
     },
 
@@ -89,9 +89,9 @@ formations = [
         "timeline": [
             lambda env: env,
             lambda env: env.remove_edges([(0,2),(0,3),(0,4)]),
-            lambda env: env.remove_node(3), # Indices change after remove
+            lambda env: env.remove_all_edges(3), # Indices change after remove
             lambda env: env.add_edges([(0,2),(0,4)]), 
-            lambda env: env.add_node(3,3).add_all_edges(3)
+            lambda env: env.add_all_edges(3)
         ]
     }
         

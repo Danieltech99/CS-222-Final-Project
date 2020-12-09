@@ -59,8 +59,9 @@ class Node():
 class TimedEnvironment():
     packet_queue = []
     time = 0
-    def __init__(self, manager):
+    def __init__(self, adj_matrix, manager):
         self.manager = manager
+        self.adj_matrix = adj_matrix
 
     def run(self):
         packet_meta = self.packet_queue.pop(0)
@@ -75,34 +76,60 @@ class TimedEnvironment():
 
 class TimedNeighborCommunication(IdManager):
     packets_sent = 0
-    def __init__(self, adj_matrix, current_id, manager, env):
+    def __init__(self, current_id, manager, env):
         self.manager = manager
         self.env = env
-        self.adj_matrix = adj_matrix
         self._current_id = current_id
 
     def send(self, node_id, packet):
         assert(node_id != self._current_id)
         u, v = self.manager.get_index(self._current_id), self.manager.get_index(node_id)
-        assert(self.adj_matrix[u][v] > 0)
-        if self.adj_matrix[u][v]:
+        assert(self.env.adj_matrix[u][v] > 0)
+        if self.env.adj_matrix[u][v]:
             self.packets_sent += 1
             # HAVE TO CLONE to keep t_in_transit accurate.
             packet = packet.clone()
             # Higher weight means more travel time
-            time_in_travel = self.adj_matrix[u][v]
+            time_in_travel = self.env.adj_matrix[u][v]
             packet.inc(time_in_travel) # Inc t_in_transit proportional to weight of edge
             self.env.queue(PacketMeta(packet, self._current_id, node_id), time_in_travel)
         
     def get_neighbor_ids(self):
         node_index = self.manager.get_index(self._current_id)
         # Get edges
-        neighbors_indexes = [i for i,w in enumerate(self.adj_matrix[node_index]) if w and i != node_index]
+        neighbors_indexes = [i for i,w in enumerate(self.env.adj_matrix[node_index]) if w and i != node_index]
         # Return ids for edges
         neighbors_ids = [self.manager.get_id(i) for i in neighbors_indexes]
         return neighbors_ids
 
-
+class DynamicTimedEnvironment(TimedEnvironment):
+    # Main Data Public Methods
+    def remove_edge(self, u, v):
+        self.adj_matrix[u][v] = 0
+        self.adj_matrix[v][u] = 0
+        return self
+    def remove_edges(self, edges):
+        for (u,v) in edges:
+            self.remove_edge(u,v)
+        return self
+    def remove_all_edges(self, node_index):
+        for id in range(len(self.adj_matrix)):
+            if node_index != id:
+                self.remove_edge(node_index, id)
+        return self
+    def add_edge(self, u, v, w = 1):
+        self.adj_matrix[u][v] = w
+        self.adj_matrix[v][u] = w
+        return self
+    def add_edges(self, edges, w = 1):
+        for (u,v) in edges:
+            self.add_edge(u,v)
+        return self
+    def add_all_edges(self, node_index, w = 1):
+        for id in range(len(self.adj_matrix)):
+            if node_index != id:
+                self.add_edge(node_index, id)
+        return self
 
 
 class TimedBroadcastNode():

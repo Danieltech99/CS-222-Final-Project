@@ -167,10 +167,10 @@ class Node():
             self.broadcast(packet, packet_meta)
         # Otherwise, forward according to shortest path in routing table
         elif packet.target_id:
-            self.packets_sent += 1
             self.send(self.route_t[packet.target_id][0], packet)
 
     def send(self, neighbor, packet):
+        self.packets_sent += 1
         if packet.source_id == self.id:
             packet.local_timestamp = self.local_timestamp
         self.com.send(neighbor, packet)
@@ -181,7 +181,6 @@ class Node():
             # don't send back to sender
             if not packet_meta or neighbor != packet_meta.from_id:
                 if neighbor not in dont_send_to:
-                    self.packets_sent += 1
                     self.send(neighbor, packet)
 
     def refresh_neighbors(self):
@@ -211,7 +210,9 @@ class Node():
 
 class TimedBroadcastNode(Node):
 
-    def share_longest_shortest_path(self):
+    last_shared_lsp = None
+    def share_longest_shortest_path(self, direct_edges = None):
+        # if direct_edges is not None: print("sharing lsp directly cond", direct_edges)
         has_routes_to = [o for o in self.route_t.items() if o[1][0] is not None]
         if len(list(has_routes_to)) == 0: return
         data = {
@@ -223,11 +224,19 @@ class TimedBroadcastNode(Node):
         p = Packet(data, self.id, None)
         p.local_timestamp = self.local_timestamp
         self.flock_lsp[self.id] = (data["value"],p.created_at)
-        for (t,(neighbor, r_time, r_timestamp)) in list(has_routes_to):
-            if neighbor is not None:
+        if direct_edges is not None:
+            # print("sharing lsp directly", self.id, data["value"], direct_edges)
+            for n_id in direct_edges:
                 indv_packet = p.clone()
-                indv_packet.target_id = t
-                self.send(neighbor, indv_packet)
+                indv_packet.target_id = n_id
+                self.send(n_id, indv_packet)
+        else:
+            # print("lsp broadcast", self.id, data["value"])
+            for (t,(neighbor, r_time, r_timestamp)) in list(has_routes_to):
+                if neighbor is not None:
+                    indv_packet = p.clone()
+                    indv_packet.target_id = t
+                    self.send(neighbor, indv_packet)
 
     def consider_routing_update(self, packet_meta):
         packet = packet_meta.unwrap()
@@ -237,17 +246,6 @@ class TimedBroadcastNode(Node):
         # or newer broadcast timestamp
         # or set to no route for same timesatmp
         # or this is a shorter route but same timestamp
-        # print("conditionals")
-        # print(packet.source_id not in self.route_t)
-        # print(packet.source_id not in self.route_t or
-        #         self.route_t[packet.source_id][2] < packet.local_timestamp)
-        # print(packet.source_id not in self.route_t or
-        #         self.route_t[packet.source_id][2] < packet.local_timestamp or
-        #         (self.route_t[packet.source_id][0] is None and self.route_t[packet.source_id][2] == packet.local_timestamp))
-        # print(packet.source_id not in self.route_t or
-        #         self.route_t[packet.source_id][2] < packet.local_timestamp or
-        #         (self.route_t[packet.source_id][0] is None and self.route_t[packet.source_id][2] == packet.local_timestamp) or
-        #         (self.route_t[packet.source_id][1] > packet.t_in_transit and self.route_t[packet.source_id][2] == packet.local_timestamp))
         if (
                 packet.source_id not in self.route_t or
                 self.route_t[packet.source_id][2] < packet.local_timestamp or
@@ -289,13 +287,10 @@ class TimedBroadcastNode(Node):
             # Pass packet along 
             self.forward(packet_meta, route_updated)
 
-    
-    def broadcast_routing_table(self):
-        table = self.route_t.copy()
-
 
     def handle_longest_shortest_path_update(self,packet, packet_meta):
         # Update if not in table or if update created later in time
+        # if self.id == 3: print("recieved lsp update for 3")
         if (packet.source_id == self.id): return False
         if (
                 packet.source_id not in self.flock_lsp or
@@ -307,17 +302,75 @@ class TimedBroadcastNode(Node):
         return False
 
     def handle(self, packet, packet_meta):
+        if (packet.source_id == self.id): return False
         if packet.data is None: return
         if packet.data["type"] == "lsp_update":
             self.handle_longest_shortest_path_update(packet, packet_meta)
         elif packet.data["type"] == "edges_removed":
             self.handle_removed_edges_update(packet, packet_meta)
+        elif packet.data["type"] == "edges_added":
+            self.handle_added_edges_update(packet, packet_meta)
 
     def handle_added_edges(self, added_edges):
         if not len(added_edges): return
-        # for n_id in added_edges:
-        #     # If a path exists that 
-        #     if 
+        # if it does not bring the other node closer, do nothing
+        # only in the case of weighted graphs
+        # if self.id == 3:
+        #     print("added_edges", added_edges, self.route_t)
+        added_edges = [n_id for n_id in added_edges if n_id not in self.route_t or self.route_t[n_id] is None or self.route_t[n_id][0] is None or self.neighbor_weights[n_id] < self.route_t[n_id][1]]
+
+        for n_id in added_edges:
+            self.route_t[n_id] = (n_id, self.neighbor_weights[n_id], self.route_t[n_id][2])
+
+        # Now have both rebroadcast to learn shortest path
+        self.local_timestamp += 1
+        self.broadcast_routing_table(added_edges)
+        self.update_leader()
+        # This shares directly to neighbors, but no neighbors for new nodes 
+        # ... bc recieving other node broadcast 
+        # print("sharing lsp dirctly from init add edges")
+        self.share_longest_shortest_path(added_edges)
+    
+    def broadcast_routing_table(self, added_edges):
+        table = self.route_t.copy()
+        # Add self to table for others
+        table[self.id] = (self.id,0,self.local_timestamp)
+
+        # Send to others
+        data = {
+            "type": "edges_added",
+            "value": table
+        }
+        p = Packet(data, self.id, None)
+        for n_id in added_edges:
+            self.send(n_id, p)
+    
+    def handle_added_edges_update(self, packet, packet_meta):
+        assert(packet.data["type"] == "edges_added")
+        if (packet.source_id == self.id): return False
+        value = packet.data["value"]
+        # Now compare transmitted and self routing table
+        added_routes = []
+        for target, (neighbor, base_hops, timestamp) in value.items():
+            # this is needed (see wedge t=3)
+            # bc self is not included in routing table
+            if target == self.id: continue 
+            if neighbor is None: continue
+            route_length = base_hops + packet.t_in_transit
+            # if new nodes discover
+            # or faster to go through the sender node than current stored route
+            assert(packet_meta.from_id is not None)
+            if (target not in self.route_t or 
+                (self.route_t[target][0] is None) or 
+                self.route_t[target][1] > route_length):
+                added_routes.append(target)
+                self.route_t[target] = (packet_meta.from_id, route_length, timestamp)
+        if len(added_routes):
+            self.broadcast(packet, packet_meta)
+            # print("sharing lsp dirctly from updae add edges")
+            self.share_longest_shortest_path()
+            self.update_leader()
+
 
     def handle_removed_edges(self, removed_edges):
         if not len(removed_edges): return
@@ -346,6 +399,7 @@ class TimedBroadcastNode(Node):
         self.local_timestamp += 1
         self.broadcast(Packet(None, self.id, None))
         self.update_leader()
+        self.share_longest_shortest_path()
 
     def handle_removed_edges_update(self, packet, packet_meta):
         assert(packet.data["type"] == "edges_removed")
@@ -369,7 +423,7 @@ class TimedBroadcastNode(Node):
         self.local_timestamp += 1
         self.broadcast(Packet(None, self.id, None))
         self.share_longest_shortest_path()
-        # self.update_leader()
+        self.update_leader()
         return True
 
 

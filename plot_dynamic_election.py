@@ -46,6 +46,7 @@ def recalibrate(env, manager, nodes):
             states.append((t_steps,[tie_breaker(node.leader) for node in nodes]))
     states.append((t_steps,[tie_breaker(node.leader) for node in nodes]))
     # print("routes",list(node.route_t for node in nodes))
+    print("lsp", list(nodes[3].flock_lsp))
     
     # Assert all equal
     center = [set(manager.get_index(leader) for leader in node.leader) for node in nodes]
@@ -59,7 +60,7 @@ def recalibrate(env, manager, nodes):
 
 
 def plot_states(node_states, correct, save_name = None):
-    print("cprrect", correct)
+    # print("correct", correct)
     # print("node_states", node_states)
 
     steps = [t for (t,_) in node_states]

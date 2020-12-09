@@ -320,7 +320,10 @@ class TimedBroadcastNode(Node):
         added_edges = [n_id for n_id in added_edges if n_id not in self.route_t or self.route_t[n_id] is None or self.route_t[n_id][0] is None or self.neighbor_weights[n_id] < self.route_t[n_id][1]]
 
         for n_id in added_edges:
-            self.route_t[n_id] = (n_id, self.neighbor_weights[n_id], self.route_t[n_id][2])
+            timestamp = 0
+            if n_id in self.route_t and self.route_t[n_id][2]: 
+                timestamp = self.route_t[n_id][2]
+            self.route_t[n_id] = (n_id, self.neighbor_weights[n_id], timestamp)
 
         # Now have both rebroadcast to learn shortest path
         self.local_timestamp += 1
@@ -441,6 +444,11 @@ class TimedBroadcastNode(Node):
 
         self.refresh_neighbors_history()
 
+    def setup(self):
+        Node.setup(self)
+        # Ensures that if a node is instantiated alone
+        # ... it will still elect a leader
+        self.update_leader()
 
 
 

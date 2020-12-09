@@ -96,7 +96,7 @@ formations = [
     },
 
     {
-        "name": "Split-Merge",
+        "name": "Flocks-Split-Merge",
         "nodes": [Node(4.0), Node(2.0), Node(-1.0), Node(3.0), Node(0.0)],
         "full": np.array([
                         [0, 1, 0, 1, 0, 0, 0],
@@ -124,7 +124,7 @@ formations = [
     },
 
     {
-        "name": "Rebalance-Flocks",
+        "name": "Flocks-Rebalance-Removal",
         "nodes": [Node(4.0), Node(2.0), Node(-1.0), Node(3.0), Node(0.0), Node(-3.0)],
         "full": np.array([
                         [0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
@@ -159,7 +159,7 @@ formations = [
     },
 
     {
-        "name": "Recalibrate-Flocks",
+        "name": "Flocks-Rebalance-Update",
         "nodes": [Node(4.0), Node(2.0), Node(-1.0), Node(3.0), Node(0.0), Node(-3.0)],
         "full": np.array([
                         [0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],

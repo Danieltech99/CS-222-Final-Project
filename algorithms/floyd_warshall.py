@@ -72,6 +72,12 @@ def floydWarshallCenter(graph, print_stats = False):
         print("Found center node: {} with distance: {}, diameter: {}, radius: {}".format(center[1], center[0], diameter[0],  center[0]))
     return center, center_min, diameter[0]
 
+def pathSum(graph):
+    dist = floydWarshall(graph)
+    N = len(dist)
+    res = [sum([dist for j, dist in enumerate(dist[i])]) for i in range(N)]
+    print("sum", res, dist)
+    return res
   
 if __name__ == "__main__":
     # GeeksforGeeks Test for Floyd Warshall

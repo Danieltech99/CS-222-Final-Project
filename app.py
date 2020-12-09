@@ -170,6 +170,9 @@ if __name__ == "__main__":
         return [[format_edge(graph,i,j) for j in range(V)] for i in range(V)]
 
     def perform_test(graph, name, generate_figure = False):
+        # Only test connected graphs
+        if fiedler(graph) < 0.01:
+            return
         formatted = format_graph(graph)
         # print("formatted")
         # print_graph(formatted)

@@ -76,8 +76,8 @@ def pathSum(graph):
     dist = floydWarshall(graph)
     N = len(dist)
     res = [sum([dist for j, dist in enumerate(dist[i])]) for i in range(N)]
-    print("sum", res, dist)
-    return res
+    maximum = [max([dist for j, dist in enumerate(dist[i])]) for i in range(N)]
+    return res,maximum
   
 if __name__ == "__main__":
     # GeeksforGeeks Test for Floyd Warshall

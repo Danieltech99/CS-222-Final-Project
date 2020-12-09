@@ -57,10 +57,6 @@ def evaluate_noisy_broadcast(graph):
 
     # Assert all equal
     center = set(manager.get_index(leader) for leader in nodes[0].leader)
-    for i,node in enumerate(nodes):
-        if i != 0:
-            leader_set = set(manager.get_index(leader) for leader in node.leader)
-            assert(len(center.symmetric_difference(leader_set)) == 0)
     # print("processed ", [(node.id, node.packets_processed) for node in nodes])
     # print("sent ", [(node.id, node.packets_sent) for node in nodes])
     # print("total processed ", sum([node.packets_processed for node in nodes]))
@@ -84,9 +80,9 @@ def plot_states(node_states, correct, save_name = None):
     loc = plticker.MultipleLocator(base=1.0) # this locator puts ticks at regular intervals
     ax.xaxis.set_major_locator(loc)
     # Plot correct answer as black dotted line
-    ax.plot(steps, [correct] * len(steps), '--', color = 'black')
     for data in lines:
         line, = ax.plot(steps, data)
+    ax.plot(steps, [correct] * len(steps), '-', color = 'black', linewidth=4, marker="*", linestyle = 'None')
     
     plt.legend()
     mkdir_p("figures/leader_election_convergence")
@@ -98,21 +94,7 @@ def plot_states(node_states, correct, save_name = None):
 
 if __name__ == "__main__":
     
-    # 
-    # Arguments
-    # 
-    
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--formation", type=int, help="enter a formation number/id",
-                        nargs='?', default=0, const=0, choices=range(0, len(formations) + 1))
-    args = parser.parse_args()
-
-    # To Create a Formation, add one to `formations.py`
-    if args.formation == 0:
-        forms = formations
-    else: 
-        form = formations[args.formation - 1]
-        forms = [form]
+    forms = formations
 
     # 
     # Run Simulations

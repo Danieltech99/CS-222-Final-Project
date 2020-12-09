@@ -22,19 +22,25 @@ from helpers.mkdir_p import mkdir_p
 import matplotlib.ticker as plticker
 from algorithms.connected_components import subGraphs
 
-def bar_graph(data, save_name):
+def bar_graph(data, data2, save_name):
+    fig, axs = plt.subplots((2),figsize=(6,10))
 
     x = range(len(data))
-    energy = data
-
     x_pos = [i for i, _ in enumerate(x)]
 
-    plt.bar(x_pos, energy)
-    plt.xlabel("Leader")
-    plt.ylabel("Hops From Leader to All Followers")
-    plt.title("Network Hops For Selected Leader")
+    axs[0].bar(x_pos, data)
+    axs[0].xaxis.set_label_text("Leader")
+    axs[0].yaxis.set_label_text("Hops From Leader to Furthest Follower")
+    # axs[0].title("Route Max Length For Selected Leader")
+    # axs[0].xticks(x_pos, x)
+    
+    axs[1].bar(x_pos, data2)
+    axs[1].xaxis.set_label_text("Leader")
+    axs[1].yaxis.set_label_text("Hops From Leader to All Followers")
+    # axs[1].title("Network Hops For Selected Leader")
+    # axs[1].xticks(x_pos, x)
 
-    plt.xticks(x_pos, x)
+    fig.suptitle("Network Hops For Selected Leader")
 
     mkdir_p("figures/compare_leader")
     plt.savefig("figures/compare_leader/{}.png".format(save_name))
@@ -51,7 +57,11 @@ def format_graph(graph):
 
 if __name__ == "__main__":
     for formation in formations:
+        # Only test connected graphs
+        if fiedler(formation["full"]) < 0.01:
+            continue
         for key in ["full", "tree"]:
-            path_sum = pathSum(format_graph(formation[key]))
-            bar_graph(path_sum, save_name=formation["name"] + " " + key)
+            path_sum, maximum = pathSum(format_graph(formation[key]))
+            print("max", maximum, path_sum)
+            bar_graph(maximum, path_sum, save_name=formation["name"] + " " + key)
             

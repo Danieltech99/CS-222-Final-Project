@@ -115,10 +115,10 @@ def evaluate_noisy_broadcast(graph):
 
     # Assert all equal
     center = set(manager.get_index(leader) for leader in node.leader)
-    for i,node in enumerate(nodes):
-        if i != 0:
-            leader_set = set(manager.get_index(leader) for leader in node.leader)
-            assert(len(center.symmetric_difference(leader_set)) == 0)
+    # for i,node in enumerate(nodes):
+    #     if i != 0:
+    #         leader_set = set(manager.get_index(leader) for leader in node.leader)
+    #         assert(len(center.symmetric_difference(leader_set)) == 0)
     # print("processed ", [(node.id, node.packets_processed) for node in nodes])
     # print("sent ", [(node.id, node.packets_sent) for node in nodes])
     print("total processed ", sum([node.packets_processed for node in nodes]))

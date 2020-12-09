@@ -74,6 +74,7 @@ class TimedEnvironment():
         self.time += 1
         for bot in self.manager.node_dict.values():
             bot.detect()
+        # print("finished detect", len(self.packet_queue), [p.packet.type for p in self.packet_queue])
 
     def queue(self, packet_meta, time_in_travel):
         packet_meta.set_arrival(time_in_travel + self.time)
@@ -87,7 +88,7 @@ class TimedNeighborCommunication(IdManager):
         self.env = env
         self._current_id = current_id
 
-    def send(self, node_id, packet):
+    def send(self, node_id, packet, offset):
         assert(node_id != self._current_id)
         u, v = self.manager.get_index(self._current_id), self.manager.get_index(node_id)
         assert(self.env.adj_matrix[u][v] > 0)
@@ -182,14 +183,15 @@ class TimedBroadcastNode():
                 self.route_t[packet.source_id][1] > packet.t_in_transit
             ):
             # Update routing table
+            print("updating {} on vertex {}, was {}".format(packet.source_id, self.id, self.route_t.get(packet.source_id)))
             self.route_t[packet.source_id] = (packet_meta.from_id, packet.t_in_transit)
             
             # Tell all neighbors of updated shortest path
             has_routes_to = [o for o in self.route_t.items() if o[1] is not None]
             # print("has {} compared to {}".format(len(list(has_routes_to)), self.initial_flock_size - 1))
             # Saves proportional to diameter
-            if len(list(has_routes_to)) >= self.initial_flock_size - 1:
-                self.share_longest_shortest_path()
+            # if len(list(has_routes_to)) >= self.initial_flock_size - 1:
+            self.share_longest_shortest_path()
             return True
         return False
 
@@ -202,10 +204,10 @@ class TimedBroadcastNode():
         packet = packet_meta.unwrap()
         route_updated = self.consider_routing_update(packet_meta)
             
+        self.handle(packet, packet_meta)
         # Arrived
         if packet.target_id == self.id:
             # Terminate
-            self.handle(packet)
             pass
         else:
             # Pass packet along 
@@ -222,16 +224,17 @@ class TimedBroadcastNode():
             self.packets_sent += 1
             self.com.send(self.route_t[packet.target_id][0], packet)
                 
-    def broadcast(self, packet, packet_meta = None):
+    def broadcast(self, packet, packet_meta = None, dont_send_to = []):
         # Send to all neighbors
         for neighbor,_ in self.com.get_neighbor_ids():
             # don't send back to sender
             if not packet_meta or neighbor != packet_meta.from_id:
-                self.packets_sent += 1
-                self.com.send(neighbor, packet)
+                if neighbor not in dont_send_to:
+                    self.packets_sent += 1
+                    self.com.send(neighbor, packet)
 
 
-    def handle_longest_shortest_path_update(self,packet):
+    def handle_longest_shortest_path_update(self,packet, packet_meta):
         # Update if not in table or if update created later in time
         if (packet.source_id == self.id): return False
         if (
@@ -243,21 +246,57 @@ class TimedBroadcastNode():
             return True
         return False
 
-    def handle(self, packet):
+    def handle(self, packet, packet_meta):
+        if packet.data is None: return
         if packet.data["type"] == "longest_shortest_path_update":
-            self.handle_longest_shortest_path_update(packet)
+            self.handle_longest_shortest_path_update(packet, packet_meta)
+        elif packet.data["type"] == "lsp_edges_removed":
+            self.handle_removed_edges_update(packet, packet_meta)
 
     def handle_added_edges(self, added_edges):
+        if not len(added_edges): return
         # for n_id in added_edges:
         #     # If a path exists that 
         #     if 
-        pass
 
     def handle_removed_edges(self, removed_edges):
-        pass
+        if not len(removed_edges): return
+        # If shortest route doesnt use this edge
+        # Don't do anything
+        # ... removing this edge, does not increase the length of any paths
+        removed_edges = [n_id for n_id in removed_edges if not (n_id in self.route_t and self.route_t[n_id][0] != n_id)]
+        # Rebroadcast node, symmetric action
+        # But first tell others to remove route if this edge is used
+        has_routes_to = [o for o in self.route_t.items() if o[1] is not None]
+        if len(list(has_routes_to)) == 0: return
+        data = {
+            "type": "lsp_edges_removed",
+            "value": removed_edges
+        }
+        p = Packet(data, self.id, None)
+        self.broadcast(p)
+        # print("sending edge removal")
+        # Now have both rebroadcast to learn shortest path
+        self.broadcast(Packet(None, self.id, None))
+
+    def handle_removed_edges_update(self, packet, packet_meta):
+        if (packet.source_id == self.id): return False
+        value = packet.data["value"]
+        # print("recieving edge removal", value)
+        # If used the relay node as beginning of route to removed node, then relay
+        packet.data["value"] = [n_id for n_id in value if n_id in self.route_t and self.route_t[n_id][0] == packet_meta.from_id]
+        for n_id in packet.data["value"]:
+            del self.route_t[n_id]
+        if not len(packet.data["value"]):
+            return False
+        # print("relaying edge removal", packet.data["value"])
+        self.broadcast(packet, packet_meta)
+        # self.update_leader()
+        return True
+
 
     def handle_updated_edges(self, updated_edges):
-        pass
+        if not len(updated_edges): return
 
     def detect(self):
         self.refresh_neighbors()

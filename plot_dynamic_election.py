@@ -157,12 +157,14 @@ if __name__ == "__main__":
 
             # FW
             true_centers, radiuses, diameters = [],[],[]
+            true_centers_full = []
             sub_graphs = subGraphs(env.adj_matrix)
             # print("sub graphs", sub_graphs)
             for (graph_map,sub_graph) in sub_graphs:
                 formatted = format_graph(sub_graph)
                 center, radius, diameter = floydWarshallCenter(formatted)
                 true_centers.append(tie_breaker(list(graph_map[n] for n in center)))
+                true_centers_full.append(set(graph_map[n] for n in center))
                 radiuses.append(radius)
                 diameters.append(diameter)
 
@@ -178,7 +180,7 @@ if __name__ == "__main__":
             # If not predicted any false and at least one element in predicted also in true
             # if (len(set(predicted).symmetric_difference(center)) == 0): result = "SUCCESS"
 
-            print('{:<24s}{:<6s}{:<12s}{:<42s}{:<42s}{:<12s}{:<12s}'.format(name, "t={}".format(t), result, str(predicted_res), str(list(true_centers)), str(list(radiuses)), str(list(diameters))))
+            print('{:<24s}{:<6s}{:<12s}{:<42s}{:<42s}{:<12s}{:<12s}'.format(name, "t={}".format(t), result, str(predicted_res), str(list(true_centers_full)), str(list(radiuses)), str(list(diameters))))
             print()
         
         print("took t={} to complete timeline and election".format(t_steps))

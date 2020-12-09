@@ -65,6 +65,7 @@ class TimedEnvironment():
         packet_meta = self.packet_queue.pop(0)
         # fast forward time until time of next arrival
         self.time = packet_meta.time_of_arrival
+        # print("moving", packet_meta.to_id, packet_meta.from_id, packet_meta.packet.data)
         self.manager.node_dict[packet_meta.to_id].process(packet_meta)
     
     def detect(self):
@@ -170,7 +171,8 @@ class Node():
             self.send(self.route_t[packet.target_id][0], packet)
 
     def send(self, neighbor, packet):
-        packet.local_timestamp = self.local_timestamp
+        if packet.source_id == self.id:
+            packet.local_timestamp = self.local_timestamp
         self.com.send(neighbor, packet)
                 
     def broadcast(self, packet, packet_meta = None, dont_send_to = []):
@@ -210,7 +212,7 @@ class Node():
 class TimedBroadcastNode(Node):
 
     def share_longest_shortest_path(self):
-        has_routes_to = [o for o in self.route_t.items() if o[1] is not None]
+        has_routes_to = [o for o in self.route_t.items() if o[1][0] is not None]
         if len(list(has_routes_to)) == 0: return
         data = {
             "type": "lsp_update",
@@ -222,9 +224,10 @@ class TimedBroadcastNode(Node):
         p.local_timestamp = self.local_timestamp
         self.flock_lsp[self.id] = (data["value"],p.created_at)
         for (t,(neighbor, r_time, r_timestamp)) in list(has_routes_to):
-            indv_packet = p.clone()
-            indv_packet.target_id = t
-            self.send(neighbor, indv_packet)
+            if neighbor is not None:
+                indv_packet = p.clone()
+                indv_packet.target_id = t
+                self.send(neighbor, indv_packet)
 
     def consider_routing_update(self, packet_meta):
         packet = packet_meta.unwrap()
@@ -232,10 +235,23 @@ class TimedBroadcastNode(Node):
         if (packet.source_id == self.id): return False
         # If not in routing table
         # or newer broadcast timestamp
+        # or set to no route for same timesatmp
         # or this is a shorter route but same timestamp
+        # print("conditionals")
+        # print(packet.source_id not in self.route_t)
+        # print(packet.source_id not in self.route_t or
+        #         self.route_t[packet.source_id][2] < packet.local_timestamp)
+        # print(packet.source_id not in self.route_t or
+        #         self.route_t[packet.source_id][2] < packet.local_timestamp or
+        #         (self.route_t[packet.source_id][0] is None and self.route_t[packet.source_id][2] == packet.local_timestamp))
+        # print(packet.source_id not in self.route_t or
+        #         self.route_t[packet.source_id][2] < packet.local_timestamp or
+        #         (self.route_t[packet.source_id][0] is None and self.route_t[packet.source_id][2] == packet.local_timestamp) or
+        #         (self.route_t[packet.source_id][1] > packet.t_in_transit and self.route_t[packet.source_id][2] == packet.local_timestamp))
         if (
                 packet.source_id not in self.route_t or
-                self.route_t[packet.source_id][2] > packet.local_timestamp or
+                self.route_t[packet.source_id][2] < packet.local_timestamp or
+                (self.route_t[packet.source_id][0] is None and self.route_t[packet.source_id][2] == packet.local_timestamp) or
                 (self.route_t[packet.source_id][1] > packet.t_in_transit and self.route_t[packet.source_id][2] == packet.local_timestamp)
             ):
             # Update routing table
@@ -249,6 +265,13 @@ class TimedBroadcastNode(Node):
         return False
 
     def update_leader(self):
+        # Recalculate self
+        has_routes_to = [o for o in self.route_t.items() if o[1][0] is not None]
+        if not len(has_routes_to):
+            self.flock_lsp[self.id] = (0, time.time())
+        else:
+            self.flock_lsp[self.id] = (max(has_routes_to, key=lambda entry: entry[1][1])[1][1], time.time())
+
         slsp = min(lsp for (lsp, _) in self.flock_lsp.values())
         self.leader = [id for id,(lsp,_) in self.flock_lsp.items() if lsp == slsp]
 
@@ -298,36 +321,54 @@ class TimedBroadcastNode(Node):
 
     def handle_removed_edges(self, removed_edges):
         if not len(removed_edges): return
-        # If shortest route doesnt use this edge
-        # Don't do anything
-        # ... removing this edge, does not increase the length of any paths
-        removed_edges = [n_id for n_id in removed_edges if not (n_id in self.route_t and self.route_t[n_id][0] != n_id)]
-        # Rebroadcast node, symmetric action
-        # But first tell others to remove route if this edge is used
-        has_routes_to = [o for o in self.route_t.items() if o[1] is not None]
-        if len(list(has_routes_to)) == 0: return
+        
+        # Find any routes that relied on this link
+        cut_routes = [(n_id,timestamp + 1) for n_id,(neighbor,path_length,timestamp) in self.route_t.items() if neighbor in removed_edges]
+
+        if len(list(cut_routes)) == 0: return
+        
+        # Update routing table
+        for n_id,_ in cut_routes:
+            self.route_t[n_id] = (None, 0, self.route_t[n_id][2])
+            if n_id in self.flock_lsp:
+                del self.flock_lsp[n_id]
+        
+        # Send to others
+        # print("SENDING edges removed", cut_routes)
         data = {
             "type": "edges_removed",
-            "value": removed_edges
+            "value": cut_routes
         }
         p = Packet(data, self.id, None)
         self.broadcast(p)
         # print("sending edge removal")
         # Now have both rebroadcast to learn shortest path
+        self.local_timestamp += 1
         self.broadcast(Packet(None, self.id, None))
+        self.update_leader()
 
     def handle_removed_edges_update(self, packet, packet_meta):
+        assert(packet.data["type"] == "edges_removed")
         if (packet.source_id == self.id): return False
         value = packet.data["value"]
-        # print("recieving edge removal", value)
         # If used the relay node as beginning of route to removed node, then relay
-        packet.data["value"] = [n_id for n_id in value if n_id in self.route_t and self.route_t[n_id][0] == packet_meta.from_id]
-        for n_id in packet.data["value"]:
-            del self.route_t[n_id]
-        if not len(packet.data["value"]):
+        # print("handling edge update", value)
+        res = [(n_id,timestamp) for n_id,timestamp in value if n_id in self.route_t and self.route_t[n_id][0] == packet_meta.from_id]
+        # print("filtering ", len(res), len(packet.data["value"]))
+        assert(packet_meta.from_id is not None)
+        if not len(res):
             return False
+        # print("filtering 2", len(res), len(packet.data["value"]))
+        packet.data["value"] = res
+        for n_id,timestamp in packet.data["value"]:
+            self.route_t[n_id] = (None, 0, self.route_t[n_id][2])
+            if n_id in self.flock_lsp and self.flock_lsp[n_id][1] < packet.created_at:
+                del self.flock_lsp[n_id]
         # print("relaying edge removal", packet.data["value"])
         self.broadcast(packet, packet_meta)
+        self.local_timestamp += 1
+        self.broadcast(Packet(None, self.id, None))
+        self.share_longest_shortest_path()
         # self.update_leader()
         return True
 

@@ -29,7 +29,7 @@ INF  = 99999
 def tie_breaker(leaders):
     if len(leaders) == 0: return -1
     # print("leaders", leaders)
-    return min(leaders)
+    return max(leaders)
 
 def recalibrate(env, manager, nodes):
     states = []
@@ -45,6 +45,7 @@ def recalibrate(env, manager, nodes):
         if last_t_steps != t_steps: 
             states.append((t_steps,[tie_breaker(node.leader) for node in nodes]))
     states.append((t_steps,[tie_breaker(node.leader) for node in nodes]))
+    # print("routes",list(node.route_t for node in nodes))
     
     # Assert all equal
     center = [set(manager.get_index(leader) for leader in node.leader) for node in nodes]
@@ -82,11 +83,11 @@ def plot_states(node_states, correct, save_name = None):
     for i, (t, states) in enumerate(correct):
         for j,bot_val in enumerate(states):
             true_lines[j].append(bot_val)
-    print("steps",steps)
-    print("true_lines",true_lines)
+    # print("steps",steps)
+    # print("true_lines",true_lines)
     for data in true_lines:
         line, = ax.plot(steps, data, '--', color = 'black')
-    print("lines",lines)
+    # print("lines",lines)
     for data in lines:
         line, = ax.plot(steps, data)
     
@@ -180,7 +181,7 @@ if __name__ == "__main__":
             # If not predicted any false and at least one element in predicted also in true
             # if (len(set(predicted).symmetric_difference(center)) == 0): result = "SUCCESS"
 
-            print('{:<24s}{:<6s}{:<12s}{:<42s}{:<42s}{:<12s}{:<12s}'.format(name, "t={}".format(t), result, str(predicted_res), str(list(true_centers_full)), str(list(radiuses)), str(list(diameters))))
+            print('{:<24s}{:<6s}{:<12s}{:<42s}{:<42s}{:<12s}{:<12s}'.format(name, "t={}".format(t), result, str(predicted), str(list(true_centers_full)), str(list(radiuses)), str(list(diameters))))
             print()
         
         print("took t={} to complete timeline and election".format(t_steps))

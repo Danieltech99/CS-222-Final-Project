@@ -35,6 +35,7 @@ def recalibrate(env, manager, nodes):
     states = []
     t_steps = env.time
     last_t_steps = t_steps
+    env.detect()
     while(len(env.packet_queue)):
         # print("in process", sum(len(node.in_queue) for node in nodes))
         # t_steps += 1
@@ -57,7 +58,7 @@ def recalibrate(env, manager, nodes):
 
 
 def plot_states(node_states, correct, save_name = None):
-    # print("cprrect", correct)
+    print("cprrect", correct)
     # print("node_states", node_states)
 
     steps = [t for (t,_) in node_states]
@@ -70,7 +71,22 @@ def plot_states(node_states, correct, save_name = None):
     loc = plticker.MultipleLocator(base=1.0) # this locator puts ticks at regular intervals
     ax.xaxis.set_major_locator(loc)
     # Plot correct answer as black dotted line
-    ax.plot([x for x,_ in correct], [y for _,y in correct], '--', color = 'black')
+    num_cc = max([len(y) for _,y in correct])
+    for i in range(len(correct)):
+        delta = num_cc - len(correct[i][1])
+        if delta > 0:
+            for j in range(delta):
+                correct[i][1].append(correct[i][1][0])
+
+    true_lines = [[] for _ in range(num_cc)]
+    for i, (t, states) in enumerate(correct):
+        for j,bot_val in enumerate(states):
+            true_lines[j].append(bot_val)
+    print("steps",steps)
+    print("true_lines",true_lines)
+    for data in true_lines:
+        line, = ax.plot(steps, data, '--', color = 'black')
+    print("lines",lines)
     for data in lines:
         line, = ax.plot(steps, data)
     
@@ -133,7 +149,7 @@ if __name__ == "__main__":
         # Fill routing table
         for node in nodes:
             node.setup()
-        true_states = [(0,tie_breaker(floydWarshallCenter(format_graph(graph))[0]))]
+        true_states = [(0,[tie_breaker(floydWarshallCenter(format_graph(graph))[0])])]
         states = [(0,[tie_breaker(node.leader) for node in nodes])]
 
         for t, f_t in enumerate(formation["timeline"]):
@@ -146,15 +162,15 @@ if __name__ == "__main__":
             for (graph_map,sub_graph) in sub_graphs:
                 formatted = format_graph(sub_graph)
                 center, radius, diameter = floydWarshallCenter(formatted)
-                true_centers.append(list(graph_map[n] for n in center))
+                true_centers.append(tie_breaker(list(graph_map[n] for n in center)))
                 radiuses.append(radius)
                 diameters.append(diameter)
 
-
+            # Leader election
             t_steps,new_states, predicted = recalibrate(env, manager, nodes)
             predicted_res = [predicted[graph_map[0]] for (graph_map,_) in sub_graphs]
             for state_t,state_list in new_states:
-                true_states.append((state_t, tie_breaker(center)))
+                true_states.append((state_t, true_centers))
             states += new_states
             print("took t={} to recalibrate".format(t_steps))
 

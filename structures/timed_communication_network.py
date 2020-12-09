@@ -68,6 +68,12 @@ class TimedEnvironment():
         # fast forward time until time of next arrival
         self.time = packet_meta.time_of_arrival
         self.manager.node_dict[packet_meta.to_id].process(packet_meta)
+    
+    def detect(self):
+        # No packets recieved here, but work done so increment clock
+        self.time += 1
+        for bot in self.manager.node_dict.values():
+            bot.detect()
 
     def queue(self, packet_meta, time_in_travel):
         packet_meta.set_arrival(time_in_travel + self.time)
@@ -97,9 +103,9 @@ class TimedNeighborCommunication(IdManager):
     def get_neighbor_ids(self):
         node_index = self.manager.get_index(self._current_id)
         # Get edges
-        neighbors_indexes = [i for i,w in enumerate(self.env.adj_matrix[node_index]) if w and i != node_index]
+        neighbors_indexes = [(i,w) for i,w in enumerate(self.env.adj_matrix[node_index]) if w and i != node_index]
         # Return ids for edges
-        neighbors_ids = [self.manager.get_id(i) for i in neighbors_indexes]
+        neighbors_ids = [(self.manager.get_id(i),w) for i,w in neighbors_indexes]
         return neighbors_ids
 
 class DynamicTimedEnvironment(TimedEnvironment):
@@ -191,22 +197,6 @@ class TimedBroadcastNode():
         slsp = min(lsp for (lsp, _) in self.flock_lsp.values())
         self.leader = [id for id,(lsp,_) in self.flock_lsp.items() if lsp == slsp]
 
-    def handle_longest_shortest_path_update(self,packet):
-        # Update if not in table or if update created later in time
-        if (packet.source_id == self.id): return False
-        if (
-                packet.source_id not in self.flock_lsp or
-                self.flock_lsp[packet.source_id][1] < packet.created_at
-            ):
-            self.flock_lsp[packet.source_id] = (packet.data["value"], packet.created_at)
-            self.update_leader()
-            return True
-        return False
-
-    def handle(self, packet):
-        if packet.data["type"] == "longest_shortest_path_update":
-            self.handle_longest_shortest_path_update(packet)
-
     def process(self, packet_meta):
         # environment gives packet, instead of agent requesting
         packet = packet_meta.unwrap()
@@ -234,11 +224,71 @@ class TimedBroadcastNode():
                 
     def broadcast(self, packet, packet_meta = None):
         # Send to all neighbors
-        for neighbor in self.com.get_neighbor_ids():
+        for neighbor,_ in self.com.get_neighbor_ids():
             # don't send back to sender
             if not packet_meta or neighbor != packet_meta.from_id:
                 self.packets_sent += 1
                 self.com.send(neighbor, packet)
 
+
+    def handle_longest_shortest_path_update(self,packet):
+        # Update if not in table or if update created later in time
+        if (packet.source_id == self.id): return False
+        if (
+                packet.source_id not in self.flock_lsp or
+                self.flock_lsp[packet.source_id][1] < packet.created_at
+            ):
+            self.flock_lsp[packet.source_id] = (packet.data["value"], packet.created_at)
+            self.update_leader()
+            return True
+        return False
+
+    def handle(self, packet):
+        if packet.data["type"] == "longest_shortest_path_update":
+            self.handle_longest_shortest_path_update(packet)
+
+    def handle_added_edges(self, added_edges):
+        # for n_id in added_edges:
+        #     # If a path exists that 
+        #     if 
+        pass
+
+    def handle_removed_edges(self, removed_edges):
+        pass
+
+    def handle_updated_edges(self, updated_edges):
+        pass
+
+    def detect(self):
+        self.refresh_neighbors()
+
+        # detect if changes 
+        added,removed,updated = self.compare_neighbors()
+        if len(added): self.handle_added_edges(added)
+        if len(removed): self.handle_removed_edges(removed)
+        if len(updated): self.handle_updated_edges(updated)
+
+        self.refresh_neighbors_history()
+
+    def compare_neighbors(self):
+        added = self.neighbor_ids - self.last_neighbor_ids
+        removed = self.last_neighbor_ids - self.neighbor_ids
+        intersection = self.last_neighbor_ids.intersection(self.neighbor_ids)
+        # Create dict of weight changes, not including links that stayed the same
+        updated = {self.neighbor_weights[id] - self.last_neighbor_weights[id] for id in intersection if self.neighbor_weights[id] - self.last_neighbor_weights[id] != 0}
+        return added,removed,updated
+
+    def refresh_neighbors(self):
+        # Store only ids in set for easier comparison
+        self.neighbor_ids = set(n for n,_ in self.com.get_neighbor_ids())
+        self.neighbor_weights = {n:w for n,w in self.com.get_neighbor_ids()}
+    
+    def refresh_neighbors_history(self):
+        self.last_neighbor_ids = self.neighbor_ids.copy()
+        self.last_neighbor_weights = self.neighbor_weights.copy()
+
     def setup(self):
+        self.refresh_neighbors()
+        self.refresh_neighbors_history()
+
         self.broadcast(Packet(None, self.id, None))

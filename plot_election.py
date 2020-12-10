@@ -10,7 +10,6 @@ from helpers.print_graph import print_graph
 from algorithms.floyd_warshall import floydWarshall, floydWarshallCenter
 from algorithms.specify import SpecifySmallStep
 import random
-from structures.communication_network import NeighborCommunication, BroadcastNode
 from structures.timed_communication_network import TimedNeighborCommunication, TimedBroadcastNode, TimedEnvironment
 from structures.id_manager import IdManager
 import pandas as pd
@@ -24,7 +23,8 @@ INF  = 99999
 
 def tie_breaker(leaders):
     if len(leaders) == 0: return -1
-    return min(leaders)
+    return max(leaders)
+
 def evaluate_noisy_broadcast(graph):
     # Setup flock
     flock_size = len(graph)
@@ -34,10 +34,13 @@ def evaluate_noisy_broadcast(graph):
     for node in nodes:
         node.set_communicator(TimedNeighborCommunication(node.id, manager, env))
 
+    def translate_id(leaders):
+        return [manager.get_index(id) for id in leaders]
+
     # Fill routing table
     for node in nodes:
         node.setup()
-    states = [(0,[tie_breaker(node.leader) for node in nodes])]
+    states = [(0,[tie_breaker(translate_id(node.leader)) for node in nodes])]
     t_steps = 0
     last_t_steps = t_steps
     while(len(env.packet_queue)):
@@ -47,13 +50,17 @@ def evaluate_noisy_broadcast(graph):
         env.run()
         t_steps = env.time
         if last_t_steps != t_steps: 
-            states.append((t_steps,[tie_breaker(node.leader) for node in nodes]))
-    states.append((t_steps,[tie_breaker(node.leader) for node in nodes]))
+            states.append((t_steps,[tie_breaker(translate_id(node.leader)) for node in nodes]))
+    states.append((t_steps,[tie_breaker(translate_id(node.leader)) for node in nodes]))
     
     print("took t={} to complete broadcast and election".format(t_steps))
 
     # Assert all equal
     center = set(manager.get_index(leader) for leader in nodes[0].leader)
+    for i,node in enumerate(nodes):
+        if i != 0:
+            leader_set = set(manager.get_index(leader) for leader in node.leader)
+            assert(len(center.symmetric_difference(leader_set)) == 0)
     # print("processed ", [(node.id, node.packets_processed) for node in nodes])
     # print("sent ", [(node.id, node.packets_sent) for node in nodes])
     # print("total processed ", sum([node.packets_processed for node in nodes]))
@@ -74,12 +81,17 @@ def plot_states(node_states, correct, save_name = None):
             lines[j].append(bot_val)
 
     _, ax = plt.subplots()
-    loc = plticker.MultipleLocator(base=1.0) # this locator puts ticks at regular intervals
+    loc = plticker.MultipleLocator(base=(1 if max(steps) < 20 else 5)) # this locator puts ticks at regular intervals
     ax.xaxis.set_major_locator(loc)
     # Plot correct answer as black dotted line
     for data in lines:
         line, = ax.plot(steps, data)
+
     ax.plot(steps, [correct] * len(steps), '-', color = 'black', linewidth=4, marker="*", linestyle = 'None')
+
+    ax.set_ylabel('Agent Id', size="xx-large")
+    ax.set_xlabel('Time', size="xx-large")
+    ax.set_title('Election ({})'.format(save_name), size="xx-large")
     
     plt.legend()
     mkdir_p("figures/leader_election_convergence")
@@ -100,7 +112,7 @@ if __name__ == "__main__":
     dash = '-' * 100
     columns = ["Formation", "Test Result", "Predicted", "Center", "R", "D"]
     print(dash)
-    print('{:<24s}{:<16s}{:<24s}{:<24s}{:<4s}{:<4s}'.format(*columns))
+    print('{:<36s}{:<16s}{:<24s}{:<24s}{:<4s}{:<4s}'.format(*columns))
     print(dash)
 
     # Preload classes to allow decision tree to make only once
@@ -114,6 +126,8 @@ if __name__ == "__main__":
         return [[format_edge(graph,i,j) for j in range(V)] for i in range(V)]
 
     def perform_test(graph, name, generate_figure = False):
+        if fiedler(graph) < 0.01:
+            return
         formatted = format_graph(graph)
         # print("formatted")
         # print_graph(formatted)
@@ -123,7 +137,7 @@ if __name__ == "__main__":
         # If not predicted any false and at least one element in predicted also in true
         if (len(set(predicted).symmetric_difference(center)) == 0): result = "SUCCESS"
 
-        print('{:<24s}{:<16s}{:<24s}{:<24s}{:<4d}{:<4d}'.format(name, result, str(predicted), str(center), radius, diameter))
+        print('{:<36s}{:<16s}{:<24s}{:<24s}{:<4d}{:<4d}'.format(name, result, str(predicted), str(center), radius, diameter))
         print()
 
         if generate_figure: plot_states(states, tie_breaker(center), save_name=name)

@@ -10,7 +10,6 @@ from helpers.print_graph import print_graph
 from algorithms.floyd_warshall import floydWarshall, floydWarshallCenter, pathSum
 from algorithms.specify import SpecifySmallStep
 import random
-from structures.communication_network import NeighborCommunication, BroadcastNode
 from structures.timed_communication_network import TimedNeighborCommunication, TimedBroadcastNode, TimedEnvironment, DynamicTimedEnvironment
 from structures.id_manager import IdManager
 import pandas as pd
@@ -38,7 +37,7 @@ def bar_graph(data, data2, centers, save_name):
     # axs[1].title("Network Hops For Selected Leader")
     # axs[1].xticks(x_pos, x)
 
-    fig.suptitle("Network Hops For Selected Leader")
+    fig.suptitle(save_name, size="xx-large")
 
     mkdir_p("figures/compare_leader")
     plt.savefig("figures/compare_leader/{}.png".format(save_name))

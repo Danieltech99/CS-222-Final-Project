@@ -10,7 +10,6 @@ from helpers.print_graph import print_graph
 from algorithms.floyd_warshall import floydWarshall, floydWarshallCenter
 from algorithms.specify import SpecifySmallStep
 import random
-from structures.communication_network import NeighborCommunication, BroadcastNode
 from structures.timed_communication_network import TimedNeighborCommunication, TimedBroadcastNode, TimedEnvironment
 from structures.id_manager import IdManager
 import pandas as pd
@@ -49,37 +48,6 @@ def generate_random_graphs(n, target_fiedler = 0.5, random_w = False):
     return graphs
 
 
-def evaluate_broadcast(graph):
-    # Setup flock
-    nodes = [BroadcastNode() for i in range(len(graph))]
-    manager = IdManager(graph, nodes)
-    for node in nodes:
-        node.set_communicator(NeighborCommunication(graph, node.id, manager))
-
-    # Fill routing table
-    for node in nodes:
-        node.broadcast()
-    t_steps = 0
-    while(sum(len(node.in_queue) for node in nodes)):
-        # print("in process", sum(len(node.in_queue) for node in nodes))
-        t_steps += 1
-        for node in nodes: node.process()
-    
-    print("took t={} to complete broadcast".format(t_steps))
-
-    longest_route = [max(((manager.get_index(node.id), path[1]) for path in node.route_t.values()), key=lambda t: t[1]) for node in nodes]
-    # print("processed ", [(node.id, node.packets_processed) for node in nodes])
-    # print("sent ", [(node.id, node.packets_sent) for node in nodes])
-    # print("total processed ", sum([node.packets_processed for node in nodes]))
-    # print("total sent ", sum([node.packets_sent for node in nodes]))
-    # print("routes", longest_route)
-    # print("routes for 0", nodes[0].route_t)
-    center_min = min(longest_route, key=lambda o: o[1])[1]
-    center = [o[0] for o in longest_route if o[1] == center_min]
-
-    return center
-
-
 def evaluate_noisy_broadcast(graph):
     def tie_breaker(leaders):
         if len(leaders) == 0: return -1
@@ -112,10 +80,10 @@ def evaluate_noisy_broadcast(graph):
 
     # Assert all equal
     center = set(manager.get_index(leader) for leader in node.leader)
-    # for i,node in enumerate(nodes):
-    #     if i != 0:
-    #         leader_set = set(manager.get_index(leader) for leader in node.leader)
-    #         assert(len(center.symmetric_difference(leader_set)) == 0)
+    for i,node in enumerate(nodes):
+        if i != 0:
+            leader_set = set(manager.get_index(leader) for leader in node.leader)
+            assert(len(center.symmetric_difference(leader_set)) == 0)
     # print("processed ", [(node.id, node.packets_processed) for node in nodes])
     # print("sent ", [(node.id, node.packets_sent) for node in nodes])
     print("total processed ", sum([node.packets_processed for node in nodes]))

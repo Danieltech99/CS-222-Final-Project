@@ -10,7 +10,6 @@ from helpers.print_graph import print_graph
 from algorithms.floyd_warshall import floydWarshall, floydWarshallCenter
 from algorithms.specify import SpecifySmallStep
 import random
-from structures.communication_network import NeighborCommunication, BroadcastNode
 from structures.timed_communication_network import TimedNeighborCommunication, TimedBroadcastNode, TimedEnvironment, DynamicTimedEnvironment
 from structures.id_manager import IdManager
 import pandas as pd
@@ -29,6 +28,9 @@ def tie_breaker(leaders):
     return max(leaders)
 
 def recalibrate(env, manager, nodes):
+    def translate_id(leaders):
+        return [manager.get_index(id) for id in leaders]
+
     states = []
     t_steps = env.time
     last_t_steps = t_steps
@@ -40,16 +42,16 @@ def recalibrate(env, manager, nodes):
         env.run()
         t_steps = env.time
         if last_t_steps != t_steps: 
-            states.append((t_steps,[tie_breaker(node.leader) for node in nodes]))
-    states.append((t_steps,[tie_breaker(node.leader) for node in nodes]))
+            states.append((t_steps,[tie_breaker(translate_id(node.leader)) for node in nodes]))
+    states.append((t_steps,[tie_breaker(translate_id(node.leader)) for node in nodes]))
     # print("routes",list(node.route_t for node in nodes))
     print("lsp", list(nodes[3].flock_lsp))
     
     # Assert all equal
-    center = [set(manager.get_index(leader) for leader in node.leader) for node in nodes]
+    center = [set(translate_id(node.leader)) for node in nodes]
     # for i,node in enumerate(nodes):
     #     if i != 0:
-    #         leader_set = set(manager.get_index(leader) for leader in node.leader)
+    #         leader_set = set(manager.get_index(leader) for leader in translate_id(node.leader))
     #         assert(len(center.symmetric_difference(leader_set)) == 0)
 
     return t_steps, states, center
@@ -88,6 +90,10 @@ def plot_states(node_states, correct, save_name = None):
         line, = ax.plot(steps, data)
     for data in true_lines:
         line, = ax.plot(steps, data, '-', color = 'black', linewidth=4, marker="*", linestyle = 'None')
+
+    ax.set_ylabel('Agent Id', size="xx-large")
+    ax.set_xlabel('Time', size="xx-large")
+    ax.set_title('Dynamic Election ({})'.format(save_name), size="xx-large")
     
     plt.legend()
     mkdir_p("figures/leader_election_dynamics")
@@ -149,7 +155,7 @@ if __name__ == "__main__":
         for node in nodes:
             node.setup()
         true_states = [(0,[tie_breaker(floydWarshallCenter(format_graph(graph))[0])])]
-        states = [(0,[tie_breaker(node.leader) for node in nodes])]
+        states = [(0,[tie_breaker([manager.get_index(id) for id in node.leader]) for node in nodes])]
 
         for t, f_t in enumerate(formation["timeline"]):
             f_t(env)

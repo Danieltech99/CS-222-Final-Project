@@ -259,7 +259,6 @@ class TimedBroadcastNode(Node):
             self.route_t[packet.source_id] = (packet_meta.from_id, packet.t_in_transit, packet.local_update_counter)
             
             # Tell all neighbors of updated shortest path
-            has_routes_to = [o for o in self.route_t.items() if o[1] is not None]
             self.share_longest_shortest_path()
             return True
         return False

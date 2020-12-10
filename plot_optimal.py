@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
 import argparse
 from collections import OrderedDict 
-from structures.system import Graph, Node
 from helpers.fiedler import fiedler, normalized_fiedler
 from data.formations import formations
 from helpers.get_edges import get_edges
@@ -20,19 +19,20 @@ from helpers.mkdir_p import mkdir_p
 import matplotlib.ticker as plticker
 from algorithms.connected_components import subGraphs
 
-def bar_graph(data, data2, save_name):
+def bar_graph(data, data2, centers, save_name):
     fig, axs = plt.subplots((2),figsize=(6,10))
 
     x = range(len(data))
     x_pos = [i for i, _ in enumerate(x)]
+    colors = ["b" if i in centers else 'grey' for i, _ in enumerate(x)]
 
-    axs[0].bar(x_pos, data)
+    axs[0].bar(x_pos, data, color=colors)
     axs[0].xaxis.set_label_text("Leader")
     axs[0].yaxis.set_label_text("Hops From Leader to Furthest Follower")
     # axs[0].title("Route Max Length For Selected Leader")
     # axs[0].xticks(x_pos, x)
     
-    axs[1].bar(x_pos, data2)
+    axs[1].bar(x_pos, data2, color=colors)
     axs[1].xaxis.set_label_text("Leader")
     axs[1].yaxis.set_label_text("Hops From Leader to All Followers")
     # axs[1].title("Network Hops For Selected Leader")
@@ -59,7 +59,7 @@ if __name__ == "__main__":
         if fiedler(formation["full"]) < 0.01:
             continue
         for key in ["full", "tree"]:
-            path_sum, maximum = pathSum(format_graph(formation[key]))
-            print("max", maximum, path_sum)
-            bar_graph(maximum, path_sum, save_name=formation["name"] + " " + key)
+            path_sum, maximum, center = pathSum(format_graph(formation[key]))
+            print(formation["name"] + " " + key, "max", maximum, "sum", path_sum)
+            bar_graph(maximum, path_sum, center, save_name=formation["name"] + " " + key)
             

@@ -74,10 +74,11 @@ def floydWarshallCenter(graph, print_stats = False):
 
 def pathSum(graph):
     dist = floydWarshall(graph)
+    center,_,_ = floydWarshallCenter(graph)
     N = len(dist)
     res = [sum([dist for j, dist in enumerate(dist[i])]) for i in range(N)]
     maximum = [max([dist for j, dist in enumerate(dist[i])]) for i in range(N)]
-    return res,maximum
+    return res,maximum,center
   
 if __name__ == "__main__":
     # GeeksforGeeks Test for Floyd Warshall

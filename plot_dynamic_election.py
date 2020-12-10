@@ -24,7 +24,6 @@ INF  = 99999
 
 def tie_breaker(leaders):
     if len(leaders) == 0: return -1
-    # print("leaders", leaders)
     return max(leaders)
 
 def recalibrate(env, manager, nodes):
@@ -36,7 +35,6 @@ def recalibrate(env, manager, nodes):
     last_t_steps = t_steps
     env.detect() 
     while(len(env.packet_queue)):
-        # print("in process", sum(len(node.in_queue) for node in nodes))
         # t_steps += 1
         last_t_steps = t_steps
         env.run()
@@ -44,23 +42,16 @@ def recalibrate(env, manager, nodes):
         if last_t_steps != t_steps: 
             states.append((t_steps,[tie_breaker(translate_id(node.leader)) for node in nodes]))
     states.append((t_steps,[tie_breaker(translate_id(node.leader)) for node in nodes]))
-    # print("routes",list(node.route_t for node in nodes))
     print("lsp", list(nodes[3].flock_lsp))
     
     # Assert all equal
     center = [set(translate_id(node.leader)) for node in nodes]
-    # for i,node in enumerate(nodes):
-    #     if i != 0:
-    #         leader_set = set(manager.get_index(leader) for leader in translate_id(node.leader))
-    #         assert(len(center.symmetric_difference(leader_set)) == 0)
 
     return t_steps, states, center
 
 
 
 def plot_states(node_states, correct, save_name = None):
-    # print("correct", correct)
-    # print("node_states", node_states)
 
     steps = [t for (t,_) in node_states]
     lines = [[] for _ in node_states[0][1]]
@@ -69,7 +60,8 @@ def plot_states(node_states, correct, save_name = None):
             lines[j].append(bot_val)
 
     _, ax = plt.subplots()
-    loc = plticker.MultipleLocator(base=(5.0 if len(steps) < 40 else 10.0)) # this locator puts ticks at regular intervals
+    # this locator puts ticks at regular intervals
+    loc = plticker.MultipleLocator(base=(5.0 if len(steps) < 40 else 10.0)) 
     ax.xaxis.set_major_locator(loc)
     # Plot correct answer as black dotted line
     num_cc = max([len(y) for _,y in correct])
@@ -83,9 +75,8 @@ def plot_states(node_states, correct, save_name = None):
     for i, (t, states) in enumerate(correct):
         for j,bot_val in enumerate(states):
             true_lines[j].append(bot_val)
-    # print("steps",steps)
-    # print("true_lines",true_lines)
-    # print("lines",lines)
+
+
     for data in lines:
         line, = ax.plot(steps, data)
     for data in true_lines:
@@ -164,7 +155,6 @@ if __name__ == "__main__":
             true_centers, radiuses, diameters = [],[],[]
             true_centers_full = []
             sub_graphs = subGraphs(env.adj_matrix)
-            # print("sub graphs", sub_graphs)
             for (graph_map,sub_graph) in sub_graphs:
                 formatted = format_graph(sub_graph)
                 center, radius, diameter = floydWarshallCenter(formatted)
@@ -183,6 +173,7 @@ if __name__ == "__main__":
 
             result = ""
             # If not predicted any false and at least one element in predicted also in true
+            # Comparision needs to be updated for 2d array
             # if (len(set(predicted).symmetric_difference(center)) == 0): result = "SUCCESS"
 
             print('{:<24s}{:<6s}{:<12s}{:<42s}{:<42s}{:<12s}{:<12s}'.format(name, "t={}".format(t), result, str(predicted), str(list(true_centers_full)), str(list(radiuses)), str(list(diameters))))

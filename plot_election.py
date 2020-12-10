@@ -45,7 +45,6 @@ def evaluate_noisy_broadcast(graph):
     last_t_steps = t_steps
     while(len(env.packet_queue)):
         # print("in process", sum(len(node.in_queue) for node in nodes))
-        # t_steps += 1
         last_t_steps = t_steps
         env.run()
         t_steps = env.time

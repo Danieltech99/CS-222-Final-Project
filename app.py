@@ -27,7 +27,6 @@ def random_graph(size, target_fiedler = 0.5):
     return tree
 
 def random_weighted_graph(size, target_fiedler = 0.5):
-    # graph = np.array([np.array([0 if i == j else random.randint(1,40) for j in range(size)]) for i in range(size)])
     graph = np.array([np.array([0 if i == j else random.randint(1,40) for j in range(size)]) for i in range(size)])
     # Make undirected (Currently only supports undirected)
     for u in range(len(graph)):
@@ -43,7 +42,6 @@ def generate_random_graphs(n, target_fiedler = 0.5, random_w = False):
     for i in range(n):
         size = (i + 1) * 5
         tree = random_weighted_graph(size,target_fiedler) if random_w else random_graph(size, target_fiedler)
-        # print(tree)
         graphs.append(tree)
     return graphs
 
@@ -63,7 +61,6 @@ def evaluate_noisy_broadcast(graph):
     t_steps = 0
     last_t_steps = t_steps
     while(len(env.packet_queue)):
-        # print("in process", sum(len(node.in_queue) for node in nodes))
         # t_steps += 1
         last_t_steps = t_steps
         env.run()
@@ -77,12 +74,8 @@ def evaluate_noisy_broadcast(graph):
         if i != 0:
             leader_set = set(manager.get_index(leader) for leader in node.leader)
             assert(len(center.symmetric_difference(leader_set)) == 0)
-    # print("processed ", [(node.id, node.packets_processed) for node in nodes])
-    # print("sent ", [(node.id, node.packets_sent) for node in nodes])
     print("total processed ", sum([node.packets_processed for node in nodes]))
     print("total sent ", sum([node.packets_sent for node in nodes]))
-    # print("routes", longest_route)
-    # print("routes for 0", nodes[0].route_t)
 
     return list(center)
 

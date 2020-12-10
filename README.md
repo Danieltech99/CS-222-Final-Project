@@ -5,7 +5,7 @@
 
 Paper: [Decentralized Optimal Leader Election for Shortest-Path Routing in Mobile Ad Hoc Networks](paper/CS_222_Final_Project.pdf)
 
-# Formations
+# Usage
 
 Formations:
 - 0: All

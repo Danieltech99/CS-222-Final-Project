@@ -55,9 +55,9 @@ def format_graph(graph):
 if __name__ == "__main__":
     for formation in formations:
         # Only test connected graphs
-        if fiedler(formation["full"]) < 0.01:
-            continue
         for key in ["full", "tree"]:
+            if fiedler(formation[key]) < 0.05:
+                continue
             path_sum, maximum, center = pathSum(format_graph(formation[key]))
             print(formation["name"] + " " + key, "max", maximum, "sum", path_sum)
             bar_graph(maximum, path_sum, center, save_name=formation["name"] + " " + key)

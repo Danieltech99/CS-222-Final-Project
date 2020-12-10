@@ -103,7 +103,22 @@ def plot_states(node_states, correct, save_name = None):
 
 if __name__ == "__main__":
     
-    forms = formations
+    # 
+    # Arguments
+    # 
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--formation", type=int, help="enter a formation number/id",
+                        nargs='?', default=0, const=0, choices=range(0, len(formations) + 1))
+    args = parser.parse_args()
+
+    # To Create a Formation, add one to `formations.py`
+    if args.formation == 0:
+        forms = formations
+    else: 
+        form = formations[args.formation - 1]
+        forms = [form]
+
 
     # 
     # Run Simulations

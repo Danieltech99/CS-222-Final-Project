@@ -49,9 +49,6 @@ def generate_random_graphs(n, target_fiedler = 0.5, random_w = False):
 
 
 def evaluate_noisy_broadcast(graph):
-    def tie_breaker(leaders):
-        if len(leaders) == 0: return -1
-        return sum(leaders) / len(leaders)
     # Setup flock
     flock_size = len(graph)
     nodes = [TimedBroadcastNode(flock_size) for i in range(flock_size)]
@@ -63,7 +60,6 @@ def evaluate_noisy_broadcast(graph):
     # Fill routing table
     for node in nodes:
         node.setup()
-    states = [(0,[tie_breaker(node.leader) for node in nodes])]
     t_steps = 0
     last_t_steps = t_steps
     while(len(env.packet_queue)):
@@ -72,9 +68,6 @@ def evaluate_noisy_broadcast(graph):
         last_t_steps = t_steps
         env.run()
         t_steps = env.time
-        if last_t_steps != t_steps: 
-            states.append((t_steps,[tie_breaker(node.leader) for node in nodes]))
-    states.append((t_steps,[tie_breaker(node.leader) for node in nodes]))
     
     print("took t={} to complete broadcast".format(t_steps))
 
@@ -91,7 +84,7 @@ def evaluate_noisy_broadcast(graph):
     # print("routes", longest_route)
     # print("routes for 0", nodes[0].route_t)
 
-    return list(center), states
+    return list(center)
 
 
 
@@ -142,7 +135,7 @@ if __name__ == "__main__":
         # print("formatted")
         # print_graph(formatted)
         center, radius, diameter = floydWarshallCenter(formatted)
-        predicted, states = evaluate_noisy_broadcast(graph)
+        predicted = evaluate_noisy_broadcast(graph)
         result = ""
         # If not predicted any false and at least one element in predicted also in true
         if (len(set(predicted).symmetric_difference(center)) == 0): result = "SUCCESS"

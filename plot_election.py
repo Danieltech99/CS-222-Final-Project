@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
 import argparse
 from collections import OrderedDict 
-from structures.system import Graph, Node
 from helpers.fiedler import fiedler, normalized_fiedler
 from data.formations import formations
 from helpers.get_edges import get_edges

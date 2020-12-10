@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
 import argparse
 from collections import OrderedDict 
-from structures.system import Graph, Node
 from helpers.fiedler import fiedler, normalized_fiedler
 from data.formations import formations
 from helpers.get_edges import get_edges
@@ -33,7 +32,7 @@ def recalibrate(env, manager, nodes):
     states = []
     t_steps = env.time
     last_t_steps = t_steps
-    env.detect()
+    env.detect() 
     while(len(env.packet_queue)):
         # print("in process", sum(len(node.in_queue) for node in nodes))
         # t_steps += 1

@@ -29,7 +29,7 @@ class Packet():
         packet_copy = Packet(self.data, self.source_id, self.target_id)
         packet_copy.created_at = self.created_at
         packet_copy.t_in_transit = self.t_in_transit
-        packet_copy.local_timestamp = self.local_timestamp
+        packet_copy.local_update_counter = self.local_update_counter
         return packet_copy
 
 class PacketMeta():
@@ -146,7 +146,7 @@ class Node():
     packets_processed = 0
     packets_sent = 0
     leader = []
-    local_timestamp = 0
+    local_update_counter = 0
     def __init__(self, initial_flock_size):
         # in queue handled by environment
 
@@ -171,7 +171,7 @@ class Node():
     def send(self, neighbor, packet):
         self.packets_sent += 1
         if packet.source_id == self.id:
-            packet.local_timestamp = self.local_timestamp
+            packet.local_update_counter = self.local_update_counter
         self.com.send(neighbor, packet)
                 
     def broadcast(self, packet, packet_meta = None, dont_send_to = []):
@@ -224,7 +224,7 @@ class TimedBroadcastNode(Node):
         # Instantiate outside of loop
         # ... so that all have the same timestamp
         p = Packet(data, self.id, None)
-        p.local_timestamp = self.local_timestamp
+        p.local_update_counter = self.local_update_counter
         self.flock_lsp[self.id] = (data["value"],p.created_at)
         if direct_edges is not None:
             # print("sharing lsp directly", self.id, data["value"], direct_edges)
@@ -250,13 +250,13 @@ class TimedBroadcastNode(Node):
         # or this is a shorter route but same timestamp
         if (
                 packet.source_id not in self.route_t or
-                self.route_t[packet.source_id][2] < packet.local_timestamp or
-                (self.route_t[packet.source_id][0] is None and self.route_t[packet.source_id][2] == packet.local_timestamp) or
-                (self.route_t[packet.source_id][1] > packet.t_in_transit and self.route_t[packet.source_id][2] == packet.local_timestamp)
+                self.route_t[packet.source_id][2] < packet.local_update_counter or
+                (self.route_t[packet.source_id][0] is None and self.route_t[packet.source_id][2] <= packet.local_update_counter) or
+                (self.route_t[packet.source_id][1] > packet.t_in_transit and self.route_t[packet.source_id][2] == packet.local_update_counter)
             ):
             # Update routing table
             # print("updating {} on vertex {}, was {}".format(packet.source_id, self.id, self.route_t.get(packet.source_id)))
-            self.route_t[packet.source_id] = (packet_meta.from_id, packet.t_in_transit, packet.local_timestamp)
+            self.route_t[packet.source_id] = (packet_meta.from_id, packet.t_in_transit, packet.local_update_counter)
             
             # Tell all neighbors of updated shortest path
             has_routes_to = [o for o in self.route_t.items() if o[1] is not None]
@@ -317,9 +317,11 @@ class TimedBroadcastNode(Node):
         if not len(added_edges): return
         # if it does not bring the other node closer, do nothing
         # only in the case of weighted graphs
-        # if self.id == 3:
-        #     print("added_edges", added_edges, self.route_t)
-        added_edges = [n_id for n_id in added_edges if n_id not in self.route_t or self.route_t[n_id] is None or self.route_t[n_id][0] is None or self.neighbor_weights[n_id] < self.route_t[n_id][1]]
+        added_edges = [n_id for n_id in added_edges 
+                            if n_id not in self.route_t or 
+                                self.route_t[n_id] is None or 
+                                self.route_t[n_id][0] is None or 
+                                self.neighbor_weights[n_id] < self.route_t[n_id][1]]
 
         for n_id in added_edges:
             timestamp = 0
@@ -328,7 +330,7 @@ class TimedBroadcastNode(Node):
             self.route_t[n_id] = (n_id, self.neighbor_weights[n_id], timestamp)
 
         # Now have both rebroadcast to learn shortest path
-        self.local_timestamp += 1
+        self.local_update_counter += 1
         self.broadcast_routing_table(added_edges)
         self.update_leader()
         # This shares directly to neighbors, but no neighbors for new nodes 
@@ -339,7 +341,7 @@ class TimedBroadcastNode(Node):
     def broadcast_routing_table(self, added_edges):
         table = self.route_t.copy()
         # Add self to table for others
-        table[self.id] = (self.id,0,self.local_timestamp)
+        table[self.id] = (self.id,0,self.local_update_counter)
 
         # Send to others
         data = {
@@ -366,6 +368,7 @@ class TimedBroadcastNode(Node):
             # or faster to go through the sender node than current stored route
             assert(packet_meta.from_id is not None)
             if (target not in self.route_t or 
+                self.route_t[target][2] < timestamp or
                 (self.route_t[target][0] is None) or 
                 self.route_t[target][1] > route_length):
                 added_routes.append(target)
@@ -401,7 +404,7 @@ class TimedBroadcastNode(Node):
         self.broadcast(p)
         # print("sending edge removal")
         # Now have both rebroadcast to learn shortest path
-        self.local_timestamp += 1
+        self.local_update_counter += 1
         self.broadcast(Packet(None, self.id, None))
         self.update_leader()
         self.share_longest_shortest_path()
@@ -420,12 +423,13 @@ class TimedBroadcastNode(Node):
         # print("filtering 2", len(res), len(packet.data["value"]))
         packet.data["value"] = res
         for n_id,timestamp in packet.data["value"]:
-            self.route_t[n_id] = (None, 0, self.route_t[n_id][2])
+            if self.route_t[n_id][2]< timestamp:
+                self.route_t[n_id] = (None, 0, self.route_t[n_id][2])
             if n_id in self.flock_lsp and self.flock_lsp[n_id][1] < packet.created_at:
                 del self.flock_lsp[n_id]
         # print("relaying edge removal", packet.data["value"])
         self.broadcast(packet, packet_meta)
-        self.local_timestamp += 1
+        self.local_update_counter += 1
         self.broadcast(Packet(None, self.id, None))
         self.share_longest_shortest_path()
         self.update_leader()
